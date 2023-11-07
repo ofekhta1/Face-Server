@@ -39,6 +39,7 @@ class ImageHelper:
       flann = cv2.FlannBasedMatcher(index_params, search_params)
       matches = flann.knnMatch(des1,des2,k=2)
       good = []
+      M = 0
       for m,n in matches:
        if m.distance < 0.7*n.distance:
         good.append(m)
@@ -49,8 +50,9 @@ class ImageHelper:
          matchesMask = mask.ravel().tolist()
          h,w = img1.shape
          pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-         dst = cv2.perspectiveTransform(pts,M)
-         img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+         if(M is not None):
+          dst = cv2.perspectiveTransform(pts,M)
+          img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
        else:
          #print( "Not enough matches are found - {}/{}".format(len(good), MIN_MATCH_COUNT) )
          matchesMask = None
@@ -59,7 +61,7 @@ class ImageHelper:
       matchesMask = matchesMask, # draw only inliers
       flags = 2)
       img3 = cv2.drawMatches(img1,kp1,img2,kp2,good,None,**draw_params)
-      if (len(good) >= MIN_MATCH_COUNT) and (max_val>= - 0.2 or len(good)>=60) :
+      if (len(good) >= MIN_MATCH_COUNT) and (max_val>= - 0.2 or len(good)>=60) and M is not None :
         print("The object (e.g., tattoo) exists in both images!")
         #plt.imshow(img3, 'gray')
         #plt.show(block=True)
@@ -68,7 +70,12 @@ class ImageHelper:
      #plt.imshow(img3, 'gray')
      #plt.show(block=True)
          print("The object (e.g., tattoo) does NOT exist or the similarity is too low.")
-      return len(good)
+      if(M is not None):
+            return len(good)
+      else:
+          return 0
+
+    
 
      
     def create_combined_file(max_loc,image,template):
@@ -261,6 +268,7 @@ class ImageHelper:
             #     errors.append("No unique matching faces found!");
             #   max_similarity = -1
             embedder = ModelLoader.load_embedder()
+            sum_points=[0]
             with os.scandir(self.UPLOAD_FOLDER) as entries:
                 for entry in entries:
                     if  entry.name != filename and filename not in entry.name:
@@ -286,26 +294,35 @@ class ImageHelper:
                                                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                                                threshold = 0.34
                                                if max_val >= threshold:
-                                                h, w, _ = template.shape
-                                                top_left = max_loc
-                                                bottom_right = (top_left[0] + w, top_left[1] + h)
-                                                cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
+                                                 h, w, _ = template.shape
+                                                 top_left = max_loc
+                                                 bottom_right = (top_left[0] + w, top_left[1] + h)
+                                                 cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
+                                                 most_similar_image = entry.name
+                                                 max_similarity =max_val
                                                 #create_combined_file() 
                                                elif(max_val>=0.273):
                                                   leng=  ImageHelper.points(4,max_val,fullfilename,entry.path)
                                                   if(leng>=4):
-                                                      most_similar_image = entry.name
-                                                      max_similarity =max_val
+                                                      if max(sum_points) < leng:
+                                                       most_similar_image = entry.name
+                                                       max_similarity =max_val
+                                                      sum_points.append(leng)
                                                elif(max_val>=0.2):
                                                   leng=  ImageHelper.points(5,max_val,fullfilename,entry.path)
                                                   if(leng>=5):
-                                                      most_similar_image = entry.name
-                                                      max_similarity =max_val
-                                               else:
+                                                      
+                                                      if max(sum_points) < leng:
+                                                       most_similar_image = entry.name
+                                                       max_similarity =max_val
+                                                      sum_points.append(leng) 
+                                               else: 
                                                  leng= ImageHelper.points(15,max_val,fullfilename,entry.path)
                                                  if(leng>=15):
-                                                      most_similar_image = entry.name
-                                                      max_similarity =max_val
+                                                      if max(sum_points) < leng:
+                                                       most_similar_image = entry.name
+                                                       max_similarity =max_val
+                                                      sum_points.append(leng)
                                                   
                                                 #print("The object (e.g., tattoo) exists in both images!")
                                                

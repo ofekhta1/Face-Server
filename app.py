@@ -53,7 +53,6 @@ app = Flask(__name__, static_folder=STATIC_FOLDER)
 
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
-
 @app.route("/pool/<path:filename>")
 def custom_static(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)

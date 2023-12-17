@@ -146,6 +146,19 @@ def index():
                     faces_length[1] = data['face_length'];
             else:
                 errors.append("No images uploaded!");
+        elif action == "improve":
+            url=SERVER_URL+"/api/improve";
+            response=req.post(url,data={"images":current_images})
+            data=response.json();
+            current_images.clear()
+            current_images.append(data['enhanced_images']);
+        elif action =="Check_family":
+             url=SERVER_URL+"/api/check_family";
+             response=req.post(url,data={"images":current_images})
+             data=response.json();
+             errors=errors+data['errors'];
+             messages=messages+data['messages'];
+
         
         session["current_images"] = current_images
         session["selected_faces"] = combochanges
@@ -183,6 +196,7 @@ def download():
         print("Images downloaded and saved successfully.")
     else:
       print(f"Failed to fetch the website. Status code: {response.status_code}")
+    
     return redirect(url_for('home'))
 
 

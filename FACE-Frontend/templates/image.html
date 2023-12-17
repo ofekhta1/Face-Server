@@ -1,6 +1,11 @@
 {% extends "base.html" %} {% block title %} Image Processing {% endblock %} {%
 block content %}
 <title>Download Pictures from Web</title>
+<style>
+    body {
+       zoom:90%;
+    }
+</style>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <a class="navbar-brand" href="#" id="showFormButton">Download Pictures from Web</a>
@@ -82,6 +87,8 @@ block content %}
                     <!-- <input type="submit" name="action" value="Upload" class="submit-btn rounded-3 w-75 m-2" /> -->
                     <input type="submit" name="action" value="Detect" class="submit-btn w-75 m-2" />
                     <input type="submit" name="action" value="Check" class="submit-btn w-75 m-2" />
+                    <input type="submit" name="action" value="Check_family" class="submit-btn w-75 m-2" />
+                    <input type="submit" name="action" value="improve" class="submit-btn w-75 m-2" />
                     {% if current | length == 2%}
                     <input type="submit" name="action" value="Compare" class="submit-btn w-75 m-2" />
                     {%endif%}

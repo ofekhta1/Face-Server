@@ -12,14 +12,15 @@ class ModelLoader:
             return None
 
     @staticmethod
-    def load_embedder():
+    def load_embedder(size):
         try:
             model_name = "arcface_r100_v1"  # Use the face recognition model
             embedder = FaceAnalysis(model=model_name)
-            embedder.prepare(ctx_id=0, det_thresh=0.5, det_size=(640, 640))
+            embedder.prepare(ctx_id=0, det_thresh=0.5, det_size=(size, size))
             return embedder
 
         except Exception as e:
             print("Error during embedder model initialization:", e)
             return None
+    
 

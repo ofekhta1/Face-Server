@@ -9,6 +9,8 @@ from model_loader import ModelLoader
 from flask_cors import CORS, cross_origin
 from insightface.utils.face_align import norm_crop
 from flask import send_from_directory
+from insightface.app import FaceAnalysis
+import pickle
 APP_DIR = os.path.dirname(__file__)
 from PIL import Image
 UPLOAD_FOLDER = r'C:\python\images_from_site'
@@ -35,6 +37,59 @@ def alignforcheck(selected_face,filename,images):
 def calculate_similarity(emb_a, emb_b):
     similarity = np.dot(emb_a, emb_b) / (np.linalg.norm(emb_a) * np.linalg.norm(emb_b))
     return similarity
+def extract_landmark_features(face):
+    # Convert keypoints to integers and flatten the array
+    landmarks_array = face["kps"].astype(int).flatten()
+
+    # Convert the NumPy array to a string in the desired format
+    landmarks_string = "[" + " ".join(map(str, landmarks_array)) + "]"
+    
+    return landmarks_string
+def format_landmarks_as_string(landmarks):
+    # Check if landmarks is already a string
+    if isinstance(landmarks, str):
+        return landmarks
+
+    # Check if landmarks is a list with one element which is a string
+    if isinstance(landmarks, list) and len(landmarks) == 1 and isinstance(landmarks[0], str):
+        return landmarks[0]
+
+    # Convert list or array of numbers into the desired string format
+    if isinstance(landmarks, list) or hasattr(landmarks, 'flatten'):
+        # Flatten the array if it's not already flat
+        if hasattr(landmarks, 'flatten'):
+            landmarks = landmarks.flatten()
+
+        # Convert landmarks to integers, then to strings, and join with space
+        landmarks_string = ' '.join(map(str, map(int, landmarks)))
+
+        return f"[{landmarks_string}]"
+
+    # If landmarks is none of the above, return it as is or handle the error
+    return landmarks
+
+def enhance_image(image_path):
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"The image at {image_path} could not be loaded.")
+        return
+
+    # Apply slight Gaussian blur to the image to reduce noise
+    blurred = cv2.GaussianBlur(image, (3, 3), 0)
+
+    # Sharpen the image by subtracting the Gaussian blur from the original image
+    sharpened = cv2.addWeighted(image, 1.5, blurred, -0.5, 0)
+
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    lab = cv2.cvtColor(sharpened, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l2 = clahe.apply(l)
+    lab = cv2.merge((l2, a, b))
+    enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    return enhanced
+#def genderfunc(size)
 
 
 def extract_embedding(embedder, face_data):
@@ -182,8 +237,11 @@ def detect_image():
             face_count = helper.detect_faces_in_image(
                 filename, images
                 )
-            faces_length[i]=face_count;
-            messages.append(f"{face_count} detected faces in {filename}.")
+            if(face_count is not None):
+             faces_length[i]=face_count;
+             messages.append(f"{face_count} detected faces in {filename}.")
+            else:
+                 errors.append(f"you can't detect this File {filename} beacuse its  does not contain a face!")
         else:
             errors.append(f"File {filename} does not exist!")
     return jsonify(
@@ -194,6 +252,9 @@ def detect_image():
             "messages": messages,
         }
     )
+
+
+
 
 
 @app.route("/api/compare", methods=["POST"])
@@ -248,6 +309,145 @@ def compare_image():
                 "messages": messages,
             });
 
+@app.route("/api/improve", methods=["POST"])
+def improve_image():
+    uploaded_images = request.form.getlist("images")
+    enhanced_images = []
+    errors = []
+
+    for image_path in uploaded_images:
+        try:
+             path = os.path.join(app.config['UPLOAD_FOLDER'], image_path)
+             enhanced_img = enhance_image(path)
+             if enhanced_img is not None:
+                directory = os.path.dirname(path)
+                enhanced_filename = 'enhanced_' + os.path.basename(image_path)
+                enhanced_image_path = os.path.join(directory, enhanced_filename)
+                cv2.imwrite(enhanced_image_path, enhanced_img)
+                enhanced_images.append(enhanced_image_path)
+        except Exception as e:
+            errors.append(str(e))
+            
+        # if len(current_image) > 0  :
+        # (
+        #     most_similar_image,
+        #     most_similar_face_num,
+        #     similarity,
+        #     temp_err,
+        # # ) = helper.get_most_similar_image(selected_face, current_image)
+        # ) = helper.get_most_similar_image_new(selected_face, current_image,fullfilename)
+        # errors = errors + temp_err
+
+    # The return statement is now correctly indented within the function
+    return jsonify({"enhanced_images": enhanced_filename, "errors": errors})
+@app.route("/api/check_family", methods=["POST"])
+def checkisfamily():
+   uploaded_images = request.form.getlist("images")
+   embeddings = []
+   messages = []
+   errors = []
+   embedder = ModelLoader.load_embedder(64)
+#    landmarks1=[]
+#    landmarks2=[]
+   if len(uploaded_images) == 2:
+            for i in range (2):
+             path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_images[i])
+             img = cv2.imread(path)
+             faces = embedder.get(img)
+             if faces:
+              embedding = ImageHelper.extract_embedding(faces[0])
+              if len(embedding) > 0:
+                embeddings.append(embedding)
+             else:
+                embedder = ModelLoader.load_embedder(640)
+                faces = embedder.get(img)
+                if faces:
+                 embedding = ImageHelper.extract_embedding(faces[0])
+                 if len(embedding) > 0:
+                  embeddings.append(embedding)
+
+   else:
+      errors.append("Select exactly 2 images for comparison.")
+
+   if len(embeddings) == 2:
+        # Calculate similarity between the two images
+        similarity = ImageHelper.calculate_similarity(
+            embeddings[0], embeddings[1]
+        )
+        with open(r'C:\python\family_model\family_classifier_model.pkl', 'rb') as file:
+         loaded_model = pickle.load(file)
+        # embedding_str_1 = np.array2string(embeddings[0], separator=',', precision=10, max_line_width=np.inf)
+        # embedding_str_1_single_line = embedding_str_1.replace('\n', ' ').replace('[', '').replace(']', '')
+        # embedding_list_1 = [float(item) for item in embedding_str_1_single_line.split(',') if item.strip()]
+        # embedding1 = np.array(embedding_list_1)
+        # print(embedding1)
+
+        # embedding_str_2 = np.array2string(embeddings[1], separator=',', precision=10, max_line_width=np.inf)
+        # embedding_str_2_single_line = embedding_str_2.replace('\n', ' ').replace('[', '').replace(']', '')
+        # embedding_list_2 = [float(item) for item in embedding_str_2_single_line.split(',') if item.strip()]
+        # embedding2 = np.array(embedding_list_2)
+        # for i in range (2):
+        app2 = FaceAnalysis()
+        app2.prepare(ctx_id=0, det_size=(64, 64))
+       
+        for i in range (2):
+         
+         path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_images[i])
+         img = cv2.imread(path)
+         faces = app2.get(img)
+         if faces:
+          if faces[0].gender == 0:
+             if(i==0):
+              Gender1 = 0 
+             else:
+              Gender2 = 0
+
+          else:
+             if(i==0):
+              Gender1 = 1 
+             else:
+              Gender2 = 1
+        else:
+          app3 = FaceAnalysis()
+          app3.prepare(ctx_id=0, det_size=(640, 640))
+          for i in range (2):
+           path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_images[i])
+           img = cv2.imread(path)
+           faces = app3.get(img)
+           if faces:
+             if faces[0].gender == 0:
+              if(i==0):
+               Gender1 = 0 
+              else:
+                Gender2 = 0
+
+             else:
+              if(i==0):
+               Gender1 = 1 
+              else:
+               Gender2 = 1
+        
+
+        #  if(i==0):
+        #   landmarks1.append(extract_landmark_features(faces[0]))
+        #   formatted_landmarks1 = format_landmarks_as_string(landmarks1)
+        #  else:
+        #   landmarks2.append(extract_landmark_features(faces[0]))
+        #   formatted_landmarks2 = format_landmarks_as_string(landmarks2)
+        #landmarks1= "[16. 19. 48. 18. 33. 33. 19. 42. 46. 41.]"
+        
+        #landmarks2="[18. 21. 47. 21. 32. 39. 20. 44. 47. 44.]"
+
+        is_same_family =ImageHelper.predict_family(loaded_model,similarity, Gender1, Gender2)
+        messages.append("Probably the Same Family" if is_same_family else "Probably Not the Same Family")
+        
+   return jsonify(
+    {
+        "errors": errors,
+        "messages": messages,
+    });
+
+     
 @app.route("/api/check", methods=["POST"])
 # def find_similar_image():
 #  check_uploaded_images = session.get('check_uploaded_images', [])
@@ -321,7 +521,7 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
 detector = ModelLoader.load_detector()
-embedder = ModelLoader.load_embedder()
+embedder = ModelLoader.load_embedder(64)
 manager =ImageEmbeddingManager();
 helper = ImageHelper(detector, embedder,manager, UPLOAD_FOLDER, STATIC_FOLDER)
 

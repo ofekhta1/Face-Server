@@ -1,8 +1,11 @@
 import numpy as np
+import pandas as pd
 from insightface.utils.face_align import norm_crop
 import os
 from model_loader import ModelLoader
+from joblib import load
 import cv2
+import pickle
 from PIL import Image
 from image_embedding_manager import ImageEmbeddingManager
 class ImageHelper:
@@ -17,6 +20,33 @@ class ImageHelper:
         ".tiff",
         ".webp"
     }
+    @staticmethod
+    def string_to_numpy_array(string):
+        # Removing brackets and splitting the string
+        str_values = string.replace('[', '').replace(']', '').split()
+        # Converting each string to a float
+        float_values = [float(val) for val in str_values]
+        # Converting the list of floats to a numpy array
+        return np.array(float_values)
+    @staticmethod
+    def create_features(df):
+     features = []
+     for _, row in df.iterrows():
+        gender_pic1_numeric =ImageHelper.gender_to_numeric(row['Gender1'])
+        gender_pic2_numeric =ImageHelper.gender_to_numeric(row['Gender2'])
+        similarity_score = row['similatrity']  # Make sure this column name is correct
+        # landmarks1 = row['landmarks1'].flatten()  # Flatten the landmarks array
+        # landmarks2 = row['landmarks2'].flatten()  # Flatten the landmarks array
+
+        # Combine the features into a single feature array
+        feature = np.concatenate(([gender_pic1_numeric, gender_pic2_numeric, similarity_score],))
+        features.append(feature)
+    
+     return np.array(features)
+    @staticmethod
+    def gender_to_numeric(gender):
+    # Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
+     return 1 if gender == 'W' else 0
 
     # Load model on startup
     def __init__(self, detector,embedder,emb_manager, UPLOAD_FOLDER, STATIC_FOLDER):
@@ -85,9 +115,62 @@ class ImageHelper:
         detected_object = template[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
         detected_object_resized = cv2.resize(detected_object, (image.shape[1], image.shape[0]))
         combined_image = np.hstack((image, detected_object_resized))
+
     # output_dir = create_output_directory(image_files, images_dir + r"\archive")
     # combined_image_path = os.path.join(output_dir, "combined_" + image_files)
     # cv2.imwrite(combined_image_path, combined_image)
+    @staticmethod
+    def string_to_numpy_array(string):
+        # Removing brackets and splitting the string
+        str_values = string.replace('[', '').replace(']', '').split()
+        # Converting each string to a float
+        float_values = [float(val) for val in str_values]
+        # Converting the list of floats to a numpy array
+        return np.array(float_values)
+    @staticmethod
+    def load_model(model_path):
+    # Load the saved model
+     return load(model_path)
+    @staticmethod
+    def predict_family(model,similarity, Gender1, Gender2):
+        with open(r'C:\python\family_model\scaler.pkl', 'rb') as scaler_file:
+         scaler = pickle.load(scaler_file)
+        with open(r'C:\python\family_model\family_classifier_model.pkl', 'rb') as model_file:
+         model = pickle.load(model_file)
+        new_data = {
+    "Gender1": Gender1,
+    "Gender2": Gender2,
+    "similatrity": similarity
+    # "landmarks1": landmarks1,
+    # "landmarks2": landmarks2
+     }
+        # new_data['landmarks1'] =ImageHelper.string_to_numpy_array(new_data['landmarks1'])
+        # new_data['landmarks2'] = ImageHelper.string_to_numpy_array(new_data['landmarks2'])
+        features =ImageHelper.create_features(pd.DataFrame([new_data]))
+        features_scaled = scaler.transform(features)
+        prediction = model.predict(features_scaled)
+        return prediction[0]        
+     
+           
+    # Flatten the embeddings if they are 2D
+    #  if embedding1.ndim > 1:
+    #     embedding1 = embedding1.flatten()
+    #  if embedding2.ndim > 1:
+    #     embedding2 = embedding2.flatten()
+
+    #  # Convert Gender1 and Gender2 to numpy arrays
+    #  Gender1_array = np.array([Gender1])
+    #  Gender2_array = np.array([Gender2])
+
+    # # Concatenate all arrays
+    #  feature = np.concatenate((embedding1, embedding2, Gender1_array, Gender2_array))
+
+    # # Reshape the feature for prediction
+    #  feature = feature.reshape(1, -1)
+
+    # # Make a prediction
+    #  prediction = model.predict(feature)
+    #  return prediction[0]
     
 
     @staticmethod
@@ -127,6 +210,9 @@ class ImageHelper:
             return len(faces)
         else:
             images.append(filename)
+   
+     
+          
 
     def create_aligned_images(self, filename, images):
         img, faces = self.__extract_faces(filename)
@@ -249,7 +335,7 @@ class ImageHelper:
         else:
             user_embedding,temp_err=self.generate_embedding(user_image_path,selected_face);
             errors=errors+temp_err;
-        if len(errors)==0:
+        if len(errors)==0 and (embedding is not None):
             # np_emb=np.array(user_embedding).astype("float32").reshape(1,-1)
             # idx=self.emb_manager.search(np_emb);
             # filtered=[]
@@ -271,7 +357,7 @@ class ImageHelper:
             sum_points=[0]
             with os.scandir(self.UPLOAD_FOLDER) as entries:
                 for entry in entries:
-                    if  entry.name != filename and filename not in entry.name:
+                    if  (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
                         if filename not in entry.name:
                             if entry.is_file()  and entry.name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tif', '.tiff')):
                                 with Image.open(entry.path) as img:
@@ -324,7 +410,9 @@ class ImageHelper:
                                                        max_similarity =max_val
                                                       sum_points.append(leng)
                                                   
-                                                #print("The object (e.g., tattoo) exists in both images!")
+            if(most_similar_image is None):
+                errors.append("No images found")
+                                                    #print("The object (e.g., tattoo) exists in both images!")
                                                
         ##ofek061123
 

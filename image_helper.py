@@ -133,9 +133,9 @@ class ImageHelper:
      return load(model_path)
     @staticmethod
     def predict_family(model,similarity, Gender1, Gender2):
-        with open(r'C:\python\family_model\scaler.pkl', 'rb') as scaler_file:
+        with open(r'C:\work\python\family_model\scaler.pkl', 'rb') as scaler_file:
          scaler = pickle.load(scaler_file)
-        with open(r'C:\python\family_model\family_classifier_model.pkl', 'rb') as model_file:
+        with open(r'C:\work\python\family_model\family_classifier_model.pkl', 'rb') as model_file:
          model = pickle.load(model_file)
         new_data = {
     "Gender1": Gender1,
@@ -353,7 +353,7 @@ class ImageHelper:
             # else:
             #     errors.append("No unique matching faces found!");
             #   max_similarity = -1
-            embedder = ModelLoader.load_embedder()
+            embedder = ModelLoader.load_embedder(64)
             sum_points=[0]
             with os.scandir(self.UPLOAD_FOLDER) as entries:
                 for entry in entries:
@@ -363,8 +363,9 @@ class ImageHelper:
                                 with Image.open(entry.path) as img:
                                     if embedder:
                                         img = cv2.imread(entry.path)
-                                        faces = embedder.get(img)
-                                        if faces:
+                                        if(img is not None):
+                                         faces = embedder.get(img)
+                                         if faces:
                                             embedding = ImageHelper.extract_embedding(faces[0]) 
                                             if embedding is not None and user_embedding is not None :
                                                 similarity = ImageHelper.calculate_similarity(user_embedding, embedding)

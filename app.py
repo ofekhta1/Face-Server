@@ -11,9 +11,11 @@ from insightface.utils.face_align import norm_crop
 from flask import send_from_directory
 from insightface.app import FaceAnalysis
 import pickle
+import tensorflow as tf
+
 APP_DIR = os.path.dirname(__file__)
 from PIL import Image
-UPLOAD_FOLDER = r'C:\python\images_from_site'
+UPLOAD_FOLDER = r'C:\work\python\images_from_site'
 #UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
 STATIC_FOLDER = os.path.join(APP_DIR, "static")
 # Create the folders if they don't exist
@@ -274,16 +276,31 @@ def compare_image():
             if len(embedding)>0:
                 embeddings.append(embedding);
             else:
-                # Generate an embedding for a specific face(first by default) in each image
-                embedding, temp_err = helper.generate_embedding(
+                  embedder = ModelLoader.load_embedder(64)
+                  path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_images[i])
+                  img = cv2.imread(path)
+                  faces = embedder.get(img)
+                  if(faces):
+                   embedding = ImageHelper.extract_embedding(faces[0])
+                   if len(embedding)>0:
+                     embeddings.append(embedding);
+                  else:
+                   embedder = ModelLoader.load_embedder(640)
+                   faces = embedder.get(img)
+                   if faces:
+                    embedding = ImageHelper.extract_embedding(faces[0])
+                    if len(embedding) > 0:
+                     embeddings.append(embedding)  
+                   else: 
+                    embedding, temp_err = helper.generate_embedding(
                     image_paths[i], combochanges[i]
-                )
-                # Add the errors and embeddings from the helper function to the local variables
-                errors = errors + temp_err
-                if embedding is not None:
-                    embeddings.append(embedding)
-                else:
-                    print("No embedding extracted.")  # Debug log
+                  )
+                 # Add the errors and embeddings from the helper function to the local variables
+                    errors = errors + temp_err
+                    if embedding is not None:
+                      embeddings.append(embedding)
+                    else:
+                      print("No embedding extracted.")  # Debug log
         else:
             errors.append("Select exactly 2 images for comparison.")
 
@@ -316,7 +333,8 @@ def improve_image():
     errors = []
 
     for image_path in uploaded_images:
-        try:
+        if("enhanced" not in image_path):
+         try:
              path = os.path.join(app.config['UPLOAD_FOLDER'], image_path)
              enhanced_img = enhance_image(path)
              if enhanced_img is not None:
@@ -325,8 +343,11 @@ def improve_image():
                 enhanced_image_path = os.path.join(directory, enhanced_filename)
                 cv2.imwrite(enhanced_image_path, enhanced_img)
                 enhanced_images.append(enhanced_image_path)
-        except Exception as e:
+         except Exception as e:
             errors.append(str(e))
+        else:
+           enhanced_filename=os.path.basename(image_path)
+           errors.append("this image is already enhanced")
             
         # if len(current_image) > 0  :
         # (
@@ -339,7 +360,14 @@ def improve_image():
         # errors = errors + temp_err
 
     # The return statement is now correctly indented within the function
-    return jsonify({"enhanced_images": enhanced_filename, "errors": errors})
+    if len(enhanced_images)==1:
+     return jsonify({"enhanced_images": enhanced_filename,"enhanced_images2":"", "errors": errors})
+    elif len(enhanced_images)==2 :
+     return jsonify({"enhanced_images": os.path.basename(enhanced_images[0]),"enhanced_images2":os.path.basename(enhanced_images[1]), "errors": errors})
+    else:
+       return jsonify({"errors": errors}) 
+       
+       
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
    uploaded_images = request.form.getlist("images")
@@ -374,7 +402,7 @@ def checkisfamily():
         similarity = ImageHelper.calculate_similarity(
             embeddings[0], embeddings[1]
         )
-        with open(r'C:\python\family_model\family_classifier_model.pkl', 'rb') as file:
+        with open(r'C:\work\python\family_model\family_classifier_model.pkl', 'rb') as file:
          loaded_model = pickle.load(file)
         # embedding_str_1 = np.array2string(embeddings[0], separator=',', precision=10, max_line_width=np.inf)
         # embedding_str_1_single_line = embedding_str_1.replace('\n', ' ').replace('[', '').replace(']', '')

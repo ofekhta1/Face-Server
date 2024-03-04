@@ -4,3 +4,4 @@ static/
 __pycache__/
 .vscode/
 .git_backup
+Models/w600k_r50.onnx

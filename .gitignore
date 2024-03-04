@@ -3,3 +3,4 @@ static/
 .venv/
 __pycache__/
 .vscode/
+.git_backup

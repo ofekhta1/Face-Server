@@ -28,21 +28,3 @@ def string_to_numpy_array(string):
 
 
 
-def create_features(df):
-    features = []
-    for _, row in df.iterrows():
-        gender_pic1_numeric =ImageHelper.gender_to_numeric(row['Gender1'])
-        gender_pic2_numeric =ImageHelper.gender_to_numeric(row['Gender2'])
-        similarity_score = row['similatrity']  # Make sure this column name is correct
-        # landmarks1 = row['landmarks1'].flatten()  # Flatten the landmarks array
-        # landmarks2 = row['landmarks2'].flatten()  # Flatten the landmarks array
-
-        # Combine the features into a single feature array
-        feature = np.concatenate(([gender_pic1_numeric, gender_pic2_numeric, similarity_score],))
-        features.append(feature)
-
-    return np.array(features)
-
-def gender_to_numeric(gender):
-# Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
-    return 1 if gender == 'W' else 0

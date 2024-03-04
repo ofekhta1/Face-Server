@@ -4,9 +4,10 @@ import os
 import numpy as np
 import math
 class ImageEmbeddingManager:
-    def __init__(self):
+    def __init__(self,root_path):
+        ImageEmbeddingManager.PKL_path=os.path.join(root_path,"static/embeddings.pkl");
         self.db_embeddings={"names":[],"embeddings":np.empty((0, 512), dtype='float32')};
-    PKL_path='static/embeddings.pkl'
+    PKL_path=''
     def train_IVFPQ_index(self,data):
         nlist = 100;
         d=512;

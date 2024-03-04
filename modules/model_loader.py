@@ -21,7 +21,7 @@ class ModelLoader:
         try:
             # model_name = "arcface_r100_v1"  # Use the face recognition model
             # embedder = FaceAnalysis(model=model_name)
-            model_name = '/home/dangrin/.insightface/models/buffalo_l/w600k_r50.onnx' # Use the face recognition model
+            model_name = 'Models/w600k_r50.onnx' # Use the face recognition model
             embedder = insightface.model_zoo.get_model(model_name)
             embedder.prepare(ctx_id=1, det_thresh=0.5, det_size=(size, size))
             return embedder

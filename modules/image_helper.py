@@ -367,7 +367,7 @@ class ImageHelper:
                 if entry.is_file() and ImageHelper.allowed_file(entry.name):
                     temp_template=grayTemplate.copy();
                     if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                        img=cv2.imread(entry.path,cv2.IMREAD_GRAYSCALE);
+                        img=cv2.imread(entry.path);
                         grayImage=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
                         if temp_template.shape[1] > img.shape[1] or temp_template.shape[0] >img.shape[0]:
                             temp_template = cv2.resize(temp_template, (img.shape[1],img.shape[0]))

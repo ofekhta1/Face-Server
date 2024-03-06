@@ -330,25 +330,7 @@ class ImageHelper:
                     print(f"failed to match image {match} because:\n{e}");
             if len(valid)==0:
                 errors.append("No unique matching faces found!");
-        elif len(embedding)==0:
-            template=cv2.imread(user_image_path)
-            with os.scandir(self.UPLOAD_FOLDER) as entries:
-                for entry in entries:
-                    if entry.is_file() and ImageHelper.allowed_file(entry.name):
-                        if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                            img=cv2.imread(entry.path);
-                            image_height, image_width, _ = img.shape
-                            template = cv2.resize(template, (image_width, image_height))
-                            template = template.astype(img.dtype)
-                            result = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
-                            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                            if max_val >= max_similarity:
-                                h, w, _ = template.shape
-                                top_left = max_loc
-                                bottom_right = (top_left[0] + w, top_left[1] + h)
-                                cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
-                                most_similar_image = entry.name
-                                max_similarity =max_val
+
         errors=errors+temp_err;
         return most_similar_image,most_similar_face,max_similarity,errors;
 

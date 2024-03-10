@@ -4,10 +4,7 @@ import os
 from . import util;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
-from .model_loader import ModelLoader
-from joblib import load
 import cv2
-from PIL import Image
 
 class ImageHelper:
   
@@ -69,9 +66,10 @@ class ImageHelper:
             images.append(detected_filename)
 
            
-            return len(faces),boxes
         else:
             images.append(filename)
+        return len(faces),boxes
+        
    
     def create_aligned_images(self, filename, images):
         img, faces = self.__extract_faces(filename)
@@ -83,7 +81,7 @@ class ImageHelper:
             )
             images.append(aligned_filename)
             face_count += 1
-        return face_count
+        return img,faces;
 
     def __extract_faces(self, filename):
         path = os.path.join(self.UPLOAD_FOLDER, filename)
@@ -100,7 +98,7 @@ class ImageHelper:
                         if(not duplicate):
                             faces.append(close_faces[j])
             return img, faces
-        except:
+        except Exception as e:
             return img,None;
 
 
@@ -136,6 +134,23 @@ class ImageHelper:
             errors.append("Error: Embedder model not initialized.")
         return embeddings,errors;
 
+    def generate_all_emb(self,img,faces,filename,save=True):
+        errors=[];
+        embedding=None;
+        embeddings=[];
+        if self.embedder:
+            if faces:
+                for i in range(len(faces)):
+                    embedding=self.embedder.get(img,faces[i]);
+                    embeddings.append(np.array(embedding));
+                    if(save):
+                        self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}");
+            else:
+                print("No faces detected.")  # Debug log
+                errors.append("No faces detected in one or both images.")
+        else:
+            errors.append("Error: Embedder model not initialized.")
+        return embeddings,errors;
 
 
     @staticmethod
@@ -203,11 +218,6 @@ class ImageHelper:
     # combined_image_path = os.path.join(output_dir, "combined_" + image_files)
     # cv2.imwrite(combined_image_path, combined_image)
    
-    @staticmethod
-    def load_model(model_path):
-    # Load the saved model
-     return load(model_path)
-
 
     @staticmethod
     def allowed_file(filename):
@@ -292,7 +302,7 @@ class ImageHelper:
         lab = cv2.merge((l2, a, b))
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
         return enhanced
-
+    
     def get_most_similar_image(self,selected_face,filename):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
@@ -326,106 +336,39 @@ class ImageHelper:
                     print(f"failed to match image {match} because:\n{e}");
             if len(valid)==0:
                 errors.append("No unique matching faces found!");
-        elif len(embedding)==0:
-            template=cv2.imread(user_image_path)
-            with os.scandir(self.UPLOAD_FOLDER) as entries:
-                for entry in entries:
-                    if entry.is_file() and ImageHelper.allowed_file(entry.name):
-                        if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                            img=cv2.imread(entry.path);
-                            image_height, image_width, _ = img.shape
-                            template = cv2.resize(template, (image_width, image_height))
-                            template = template.astype(img.dtype)
-                            result = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
-                            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                            if max_val >= max_similarity:
-                                h, w, _ = template.shape
-                                top_left = max_loc
-                                bottom_right = (top_left[0] + w, top_left[1] + h)
-                                cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
-                                most_similar_image = entry.name
-                                max_similarity =max_val
+
         errors=errors+temp_err;
         return most_similar_image,most_similar_face,max_similarity,errors;
 
 
-    def get_most_similar_image_new(self,selected_face,filename,fullfilename):
+    def get_most_similar_image_by_template(self,filename):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
         most_similar_image=None;
         max_similarity=-1;
-        facenum=-2;
-        aligned_filename=f"aligned_{0 if selected_face == -2 else selected_face}_{filename}";
-        embedding=self.emb_manager.get_embedding_by_name(aligned_filename)
-        if len(embedding)>0:
-            user_embedding=embedding;
-        else:
-            user_embedding,temp_err=self.generate_embedding(user_image_path,selected_face);
-            errors=errors+temp_err;
-        if (embedding is not None): #and len(errors)==0  
-            sum_points=[0]
-            with os.scandir(self.UPLOAD_FOLDER) as entries:
-                for entry in entries:
-                    if  (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                            if entry.is_file() and ImageHelper.allowed_file(entry.name):
-                                embeddings,emb_errors =self.generate_all_emb(entry.name,False);
-                                if(len(emb_errors)>0 or len(embeddings)==0):
-                                    errors+=emb_errors;  
-                                    
-                                if user_embedding is not None:
-                                    for embedding in embeddings:
-                                        similarity = util.calculate_similarity(user_embedding, embedding)
-                                        if similarity > max_similarity:
-                                            max_similarity = similarity
-                                            most_similar_image = entry.name
-                                else:
-                                    img=cv2.imread(entry.path);
-                                    template = cv2.imread(fullfilename) 
-                                    image_height, image_width, _ = img.shape
-                                    template = cv2.resize(template, (image_width, image_height))
-                                    template = template.astype(img.dtype)
-                                    result = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
-                                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                                    threshold = 0.34
-                                    if max_val >= threshold:
-                                        h, w, _ = template.shape
-                                        top_left = max_loc
-                                        bottom_right = (top_left[0] + w, top_left[1] + h)
-                                        cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
-                                        most_similar_image = entry.name
-                                        max_similarity =max_val
-                                    #create_combined_file() 
-                                    elif(max_val>=0.273):
-                                        leng=  ImageHelper.points(4,max_val,fullfilename,entry.path)
-                                        if(leng>=4):
-                                            if max(sum_points) < leng:
-                                                most_similar_image = entry.name
-                                                max_similarity =max_val
-                                            sum_points.append(leng)
-                                    elif(max_val>=0.2):
-                                        leng=  ImageHelper.points(5,max_val,fullfilename,entry.path)
-                                        if(leng>=5):
-                                            
-                                            if max(sum_points) < leng:
-                                                most_similar_image = entry.name
-                                                max_similarity =max_val
-                                            sum_points.append(leng) 
-                                    else: 
-                                        leng= ImageHelper.points(15,max_val,fullfilename,entry.path)
-                                        if(leng>=15):
-                                            if max(sum_points) < leng:
-                                                most_similar_image = entry.name
-                                                max_similarity =max_val
-                                            sum_points.append(leng)
-                                                  
-            if(most_similar_image is None):
-                errors.append("No images found")
-                                                    #print("The object (e.g., tattoo) exists in both images!")
-                                               
+        box=[]
+        template=cv2.imread(user_image_path)
+        grayTemplate=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
 
-        # else:
-        #     errors=errors+temp_err;
-        return most_similar_image,int(facenum),max_similarity,errors;
+        with os.scandir(self.UPLOAD_FOLDER) as entries:
+            for entry in entries:
+                if entry.is_file() and ImageHelper.allowed_file(entry.name):
+                    temp_template=grayTemplate.copy();
+                    if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
+                        img=cv2.imread(entry.path);
+                        grayImage=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
+                        if temp_template.shape[1] > img.shape[1] or temp_template.shape[0] >img.shape[0]:
+                            temp_template = cv2.resize(temp_template, (img.shape[1],img.shape[0]))
+                        result = cv2.matchTemplate(grayImage, temp_template, cv2.TM_CCOEFF_NORMED)
+                        _, max_val, _ , max_loc = cv2.minMaxLoc(result)
+                        if max_val >= max_similarity:
+                            box=[max_loc[0],max_loc[1],template.shape[1]+max_loc[0],template.shape[0]+max_loc[1]]
+                            # bottom_right = (top_left[0] + w, top_left[1] + h)
+                            # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
+                            most_similar_image = entry.name
+                            max_similarity =max_val
+            cv2.destroyAllWindows();
+        return most_similar_image,box,max_similarity,errors;
     
     def cluster_images(self,max_distance,min_samples):
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings

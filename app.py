@@ -18,6 +18,7 @@ STATIC_FOLDER = os.path.join(APP_DIR, "static")
 
 # Create the folders if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER,"no_face"), exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
 def custom_sort(filename):
@@ -145,9 +146,10 @@ def upload_image():
     errors = []
     current_images = []
     files = request.files.items()
-    faces_length = [0] * len(request.files)
+    faces_length = []
     valid_images=[]
     generated=[];
+    save_invalid=request.form.get("save_invalid",False,type=bool);
     invalid_images=[]
     for image_name, file in files:
         if file and file.filename:
@@ -158,12 +160,16 @@ def upload_image():
                 try:
                     file.save(path)
                     # Generate the embeddings for all faces and store them for future indexing
-                    _, temp_err = helper.generate_all_emb(file.filename)
+                    img,faces=helper.create_aligned_images(file.filename,generated)
+                    _, temp_err = helper.generate_all_emb(img,faces,file.filename)
                     errors = errors + temp_err
-
+                    faces_length.append(len(faces)) if faces else faces_length.append(0);
                     if len(temp_err) > 0:
-                        # os.remove(path)
-                        invalid_images.append(file.filename);
+                        if(save_invalid):
+                            os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
+                        else:
+                            os.remove(path);
+                        invalid_images.append("no_face/"+file.filename);
                         current_images.append(None)
                     else:
                         current_images.append(file.filename)
@@ -175,15 +181,8 @@ def upload_image():
             else:
                 errors.append(f"Invalid file format for {file.filename}. ")
 
-    # if len(errors) == 0:
-        # Detect faces immediately after uploading to fill the combo box
-    for i in range(len(valid_images)):
-            faces_length[i] = helper.create_aligned_images(
-                valid_images[i], generated
-            )
-
     manager.save()
-    return jsonify({"images": valid_images+invalid_images, "faces_length": faces_length, "errors": errors})
+    return jsonify({"images": valid_images,"invalid_images":invalid_images, "faces_length": faces_length, "errors": errors})
 
 
 @app.route("/api/delete", methods=["GET"])
@@ -227,9 +226,9 @@ def align_image():
         else:
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            face_count = helper.create_aligned_images(filename, images)
-            faces_length.append(face_count)
-            messages.append(f"{face_count} detected faces in {filename}.")
+            _,faces = helper.create_aligned_images(filename, images)
+            faces_length.append(len(faces))
+            messages.append(f"{len(faces)} detected faces in {filename}.")
         else:
             errors.append(f"File {filename} does not exist!")
     return jsonify(
@@ -296,9 +295,7 @@ def compare_image():
     embeddings = []
     messages = []
     errors = []
-    image_paths = [
-        os.path.join(UPLOAD_FOLDER, filename) for filename in uploaded_images
-    ]
+
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
@@ -346,61 +343,37 @@ def improve_image():
     uploaded_images = request.form.getlist("images")
     checked_images1 = request.form.get("checked_images1")
     checked_images2 = request.form.get("checked_images2")
+    checked_images = [checked_images1,checked_images2]
     enhanced_images = []
     errors = []
     messages=[]
     i=0
-    options=[]
     print(request.form)
     for filename in uploaded_images:
         i=i+1
         if "enhanced" not in filename:
             try:
-                if(i==1):
-                    if(checked_images1=='True'):
-                      enhanced_img = helper.enhance_image(filename)
-                      if enhanced_img is not None:
-                        enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
-                        cv2.imwrite(enhanced_image_path, enhanced_img)
-                        enhanced_images.append("enhanced_"+filename)
-                    else:
-                         enhanced_images.append(filename);
-                else:
-                     if(checked_images2=='True'):
-                         enhanced_img = helper.enhance_image(filename)
-                         if enhanced_img is not None:
-                          enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
-                          cv2.imwrite(enhanced_image_path, enhanced_img)
-                          enhanced_images.append("enhanced_"+filename)
-                     else:
-                         enhanced_images.append(filename);
-                         
-                         
-                         
+                enhanced_img = helper.enhance_image(filename)
+                if enhanced_img is not None:
+                    enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
+                    cv2.imwrite(enhanced_image_path, enhanced_img)
+                    enhanced_images.append("enhanced_"+filename)
+                    img,faces=helper.create_aligned_images("enhanced_"+filename,[])
+                    _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+filename)
+                    errors = errors + temp_err
 
+                    if len(temp_err) > 0:
+                        os.remove(enhanced_image_path);
             except Exception as e:
                 errors.append(str(e))
         else:
-             if(i==1):
-                  if(checked_images1=='True'):
-                    filename = filename.replace("enhanced_", "")
-                    enhanced_images.append(filename);
-                  else:
-                      enhanced_images.append(filename);
-             else:
-                  if(checked_images2=='True'):
-                    filename = filename.replace("enhanced_", "")
-                    enhanced_images.append(filename);
-                  else:
-                      enhanced_images.append(filename);
-                 
-                      
-                 
+            if(checked_images[i]=='True'):
+                filename = filename.replace("enhanced_", "")
+                enhanced_images.append(filename);
+            else:
+                enhanced_images.append(filename);
             
-            #messages.append(f"check")
-            #options.append(messages.option)
-    
-            #errors.append(f"image {filename} is already enhanced!")
+            errors.append(f"image {filename} is already enhanced!")
     return jsonify(
         {
             "enhanced_images": enhanced_images,
@@ -419,13 +392,14 @@ def checkisfamily():
     sort_detected()
 
     uploaded_images = request.form.getlist("images")
+    combochanges = [int(x) for x in request.form.getlist("selected_faces")]
     embeddings = []
     messages = []
     errors = []
     if len(uploaded_images) == 2:
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
-            aligned_filename = f"aligned_0_{uploaded_images[i]}"
+            aligned_filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
             embedding = manager.get_embedding_by_name(aligned_filename)
             if len(embedding) > 0:
                 embeddings.append(embedding)
@@ -537,7 +511,6 @@ def find_similar_image():
     face_length = 0
     current_image = request.form.get("image")
     selected_face = int(request.form.get("selected_face"))
-    fullfilename = os.path.join(UPLOAD_FOLDER, current_image)
     if len(current_image) > 0:
         (
             most_similar_image,
@@ -545,9 +518,6 @@ def find_similar_image():
             similarity,
             temp_err,
             ) = helper.get_most_similar_image(selected_face, current_image)
-        # ) = helper.get_most_similar_image_new(
-        #     selected_face, current_image, fullfilename
-        # )
         errors = errors + temp_err
     else:
         errors.append("no images selected for check")
@@ -555,7 +525,9 @@ def find_similar_image():
         messages.append(
             f"The most similar face is no. {most_similar_face_num+1} in image {most_similar_image} with similarity of {similarity:.4f}"
         )
-        face_length = helper.create_aligned_images(most_similar_image, [])
+        _,faces = helper._ImageHelper__extract_faces(most_similar_image)
+        if faces:
+            face_length=len(faces)
     return jsonify(
         {
             "image": most_similar_image,
@@ -566,6 +538,36 @@ def find_similar_image():
         }
     )
 
+@app.route("/api/check_template", methods=["POST"])
+def find_by_template():
+    most_similar_image = None
+    messages = []
+    errors = []
+    box=[]
+    similarity = -1
+    current_image = request.form.get("template")
+    if len(current_image) > 0:
+        (
+            most_similar_image,
+            box,
+            similarity,
+            temp_err,
+            ) = helper.get_most_similar_image_by_template(current_image)
+        errors = errors + temp_err
+    else:
+        errors.append("no images selected for check")
+    if most_similar_image:
+        messages.append(
+            f"The most similar image is {most_similar_image} with similarity of {similarity:.4f}"
+        )
+    return jsonify(
+        {
+            "image": most_similar_image,
+            "box": box,
+            "errors": errors,
+            "messages": messages,
+        }
+    )
 
 @app.route("/api/find", methods=["POST"])
 def find_face_in_image():
@@ -654,7 +656,7 @@ app.config["ROOT_FOLDER"] = APP_DIR
 
 
 detector = ModelLoader.load_detector(1024)
-detector_zoomed = ModelLoader.load_detector(160)
+detector_zoomed = ModelLoader.load_detector(320)
 embedder = ModelLoader.load_embedder(64)
 manager = ImageEmbeddingManager(APP_DIR)
 groups = ImageGroupRepository()

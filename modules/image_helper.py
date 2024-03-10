@@ -52,17 +52,23 @@ class ImageHelper:
                     cv2.circle(
                         img,
                         (int(point[0]), int(point[1])),
-                        2,
-                        (0, 255, 0),
-                        -2,
+                        5,
+                        (0, 0, 255),
+                        -1,
                     )
                 box=face['bbox'].astype(int).tolist();
                 boxes.append(box)
             detected_filename = "detected_" + filename
-            detected_path = os.path.join(self.STATIC_FOLDER, detected_filename)
+            detected_path = os.path.join(self.UPLOAD_FOLDER, detected_filename)
+
+            
+            #img=norm_crop(img, landmarks, 112, "arcface")
+            
             # message += f"path {detected_path}. "
             cv2.imwrite(detected_path, img)
             images.append(detected_filename)
+
+           
             return len(faces),boxes
         else:
             images.append(filename)

@@ -20,6 +20,22 @@ STATIC_FOLDER = os.path.join(APP_DIR, "static")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
+def custom_sort(filename):
+     return (not filename.startswith('detected'), filename)
+def sort_detected():
+    sorted_files = sorted(os.listdir(UPLOAD_FOLDER), key=custom_sort)
+    for filename in sorted_files:
+    # Check if the filename starts with 'detected'
+     if filename.startswith('detected'):
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        try:
+            os.remove(file_path)
+            print(f"Deleted: {filename}")
+        except Exception as e:
+            print(f"Failed to delete {filename}. Reason: {e}")
+     else:
+        break
+
 
 
 
@@ -127,12 +143,12 @@ def check_uploaded_images(filename, image_helper_instance):
 @app.route("/api/upload", methods=["POST"])
 def upload_image():
     errors = []
+    current_images = []
     files = request.files.items()
     faces_length = [0] * len(request.files)
     valid_images=[]
     generated=[];
     invalid_images=[]
-    current_images = []
     for image_name, file in files:
         if file and file.filename:
             filename = file.filename.replace("_", "")
@@ -176,6 +192,27 @@ def delete_embeddings():
     return jsonify({"result": "success"})
 
 
+# @app.route("/api/clear", methods=["GET"])
+# def clear_image():
+#     #current_detected_images = []
+#     uploaded_images = request.form.getlist("images")
+#     checked_images1 = request.form.get("checked_images1")
+#     checked_images2 = request.form.get("checked_images2")
+#     faces_length = []
+#     messages = []
+#     errors = []
+#     images = []
+#     return jsonify(
+#         {
+#             "images": images,
+#             "faces_length": faces_length,
+#             "errors": errors,
+#             "messages": messages,
+#         }
+#     )
+
+
+
 @app.route("/api/align", methods=["POST"])
 def align_image():
     uploaded_images = request.form.getlist("images")
@@ -207,6 +244,7 @@ def align_image():
 
 @app.route("/api/detect", methods=["POST"])
 def detect_image():
+    #current_detected_images = []
     uploaded_images = request.form.getlist("images")
     faces_length = []
     messages = []
@@ -220,6 +258,17 @@ def detect_image():
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
             face_count, _ = helper.detect_faces_in_image(filename, images)
+            detected_filename = "detected_" + filename
+            # detected_path = os.path.join(UPLOAD_FOLDER, detected_filename)
+
+            # os.remove(detected_path)
+             
+
+
+            detected_path = os.path.join(STATIC_FOLDER, detected_filename)
+            img = cv2.imread(path)
+            cv2.imwrite(detected_path, img)
+            
             if face_count is not None:
                 faces_length.append(face_count)
                 messages.append(f"{face_count} detected faces in {filename}.")
@@ -241,6 +290,7 @@ def detect_image():
 
 @app.route("/api/compare", methods=["POST"])
 def compare_image():
+    sort_detected()
     uploaded_images = request.form.getlist("images")
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
     embeddings = []
@@ -292,33 +342,82 @@ def compare_image():
 
 @app.route("/api/improve", methods=["POST"])
 def improve_image():
+   
     uploaded_images = request.form.getlist("images")
+    checked_images1 = request.form.get("checked_images1")
+    checked_images2 = request.form.get("checked_images2")
     enhanced_images = []
     errors = []
-
+    messages=[]
+    i=0
+    options=[]
+    print(request.form)
     for filename in uploaded_images:
+        i=i+1
         if "enhanced" not in filename:
             try:
-                enhanced_img = helper.enhance_image(filename)
-                if enhanced_img is not None:
-                    enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
-                    cv2.imwrite(enhanced_image_path, enhanced_img)
-                    enhanced_images.append("enhanced_"+filename)
+                if(i==1):
+                    if(checked_images1=='True'):
+                      enhanced_img = helper.enhance_image(filename)
+                      if enhanced_img is not None:
+                        enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
+                        cv2.imwrite(enhanced_image_path, enhanced_img)
+                        enhanced_images.append("enhanced_"+filename)
+                    else:
+                         enhanced_images.append(filename);
+                else:
+                     if(checked_images2=='True'):
+                         enhanced_img = helper.enhance_image(filename)
+                         if enhanced_img is not None:
+                          enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
+                          cv2.imwrite(enhanced_image_path, enhanced_img)
+                          enhanced_images.append("enhanced_"+filename)
+                     else:
+                         enhanced_images.append(filename);
+                         
+                         
+                         
+
             except Exception as e:
                 errors.append(str(e))
         else:
-            enhanced_images.append(filename);
-            errors.append(f"image {filename} is already enhanced!")
+             if(i==1):
+                  if(checked_images1=='True'):
+                    filename = filename.replace("enhanced_", "")
+                    enhanced_images.append(filename);
+                  else:
+                      enhanced_images.append(filename);
+             else:
+                  if(checked_images2=='True'):
+                    filename = filename.replace("enhanced_", "")
+                    enhanced_images.append(filename);
+                  else:
+                      enhanced_images.append(filename);
+                 
+                      
+                 
+            
+            #messages.append(f"check")
+            #options.append(messages.option)
+    
+            #errors.append(f"image {filename} is already enhanced!")
     return jsonify(
         {
             "enhanced_images": enhanced_images,
             "errors": errors,
+            "messages":messages,
+            "options": ["1", "2", "all"],
+
         }
     )
 
 
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
+    
+# Get a list of all files in the directory and sort them using the custom sort function
+    sort_detected()
+
     uploaded_images = request.form.getlist("images")
     embeddings = []
     messages = []
@@ -393,6 +492,7 @@ def checkisfamily():
 
 @app.route("/api/check_many", methods=["POST"])
 def find_similar_images():
+    sort_detected()
     errors = []
     images = []
     files = request.files.items()
@@ -429,6 +529,7 @@ def find_similar_images():
 
 @app.route("/api/check", methods=["POST"])
 def find_similar_image():
+    sort_detected()
     most_similar_image = None
     messages = []
     errors = []
@@ -468,6 +569,7 @@ def find_similar_image():
 
 @app.route("/api/find", methods=["POST"])
 def find_face_in_image():
+    sort_detected()
     filename = request.form.get("image")
     faces_length = [0]
     messages = []

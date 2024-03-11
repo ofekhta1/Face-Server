@@ -56,7 +56,7 @@ class ImageHelper:
                 box=face['bbox'].astype(int).tolist();
                 boxes.append(box)
             detected_filename = "detected_" + filename
-            detected_path = os.path.join(self.UPLOAD_FOLDER, detected_filename)
+            detected_path = os.path.join(self.STATIC_FOLDER, detected_filename)
 
             
             #img=norm_crop(img, landmarks, 112, "arcface")
@@ -73,6 +73,8 @@ class ImageHelper:
    
     def create_aligned_images(self, filename, images):
         img, faces = self.__extract_faces(filename)
+        if(not faces):
+            return img,None;
         face_count = 0
 
         for face in faces:
@@ -84,7 +86,10 @@ class ImageHelper:
         return img,faces;
 
     def __extract_faces(self, filename):
-        path = os.path.join(self.UPLOAD_FOLDER, filename)
+        if filename.startswith("aligned_") or filename.startswith("detected_"):
+            path = os.path.join(self.STATIC_FOLDER, filename)
+        else:
+            path = os.path.join(self.UPLOAD_FOLDER, filename)
         img = cv2.imread(path)
         try:
             close_faces=self.detector_zoomed.get(img)

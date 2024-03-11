@@ -261,12 +261,6 @@ def detect_image():
             # detected_path = os.path.join(UPLOAD_FOLDER, detected_filename)
 
             # os.remove(detected_path)
-             
-
-
-            detected_path = os.path.join(STATIC_FOLDER, detected_filename)
-            img = cv2.imread(path)
-            cv2.imwrite(detected_path, img)
             
             if face_count is not None:
                 faces_length.append(face_count)
@@ -340,47 +334,35 @@ def compare_image():
 @app.route("/api/improve", methods=["POST"])
 def improve_image():
    
-    uploaded_images = request.form.getlist("images")
-    checked_images1 = request.form.get("checked_images1")
-    checked_images2 = request.form.get("checked_images2")
-    checked_images = [checked_images1,checked_images2]
-    enhanced_images = []
+    image = request.form.get("image")
+
+    enhanced_image=image
     errors = []
     messages=[]
     i=0
     print(request.form)
-    for filename in uploaded_images:
-        i=i+1
-        if "enhanced" not in filename:
-            try:
-                enhanced_img = helper.enhance_image(filename)
-                if enhanced_img is not None:
-                    enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+filename)
-                    cv2.imwrite(enhanced_image_path, enhanced_img)
-                    enhanced_images.append("enhanced_"+filename)
-                    img,faces=helper.create_aligned_images("enhanced_"+filename,[])
-                    _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+filename)
-                    errors = errors + temp_err
+    if "enhanced" not in image:
+        try:
+            enhanced_img = helper.enhance_image(image)
+            if enhanced_img is not None:
+                enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+image)
+                cv2.imwrite(enhanced_image_path, enhanced_img)
+                enhanced_image="enhanced_"+image
+                img,faces=helper.create_aligned_images("enhanced_"+image,[])
+                _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image)
+                errors = errors + temp_err
 
-                    if len(temp_err) > 0:
-                        os.remove(enhanced_image_path);
-            except Exception as e:
-                errors.append(str(e))
-        else:
-            if(checked_images[i]=='True'):
-                filename = filename.replace("enhanced_", "")
-                enhanced_images.append(filename);
-            else:
-                enhanced_images.append(filename);
-            
-            errors.append(f"image {filename} is already enhanced!")
+                if len(temp_err) > 0:
+                    os.remove(enhanced_image_path);
+        except Exception as e:
+            errors.append(str(e))
+    else:
+        errors.append(f"image {image} is already enhanced!")
     return jsonify(
         {
-            "enhanced_images": enhanced_images,
+            "enhanced_image": enhanced_image,
             "errors": errors,
             "messages":messages,
-            "options": ["1", "2", "all"],
-
         }
     )
 

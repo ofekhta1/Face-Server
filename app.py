@@ -9,9 +9,7 @@ from insightface.utils.face_align import norm_crop
 from flask import send_from_directory
 import json
 import traceback
-
 APP_DIR = os.path.dirname(__file__)
-from PIL import Image
 
 UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
 STATIC_FOLDER = os.path.join(APP_DIR, "static")
@@ -21,38 +19,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER,"no_face"), exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
-def custom_sort(filename):
-     return (not filename.startswith('detected'), filename)
-def sort_detected():
-    sorted_files = sorted(os.listdir(UPLOAD_FOLDER), key=custom_sort)
-    for filename in sorted_files:
-    # Check if the filename starts with 'detected'
-     if filename.startswith('detected'):
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        try:
-            os.remove(file_path)
-            print(f"Deleted: {filename}")
-        except Exception as e:
-            print(f"Failed to delete {filename}. Reason: {e}")
-     else:
-        break
-
-
-
-
-def alignforcheck(selected_face, filename, images):
-    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    img = cv2.imread(path)
-    faces = detector.get(img)
-    for face in faces:
-        landmarks = face["kps"].astype(np.int)
-        aligned_filename = f"aligned_{selected_face}_{filename}"  # Name contains the selected face index
-        aligned_path = os.path.join(STATIC_FOLDER, aligned_filename)
-        aligned_img = norm_crop(img, landmarks, 112, "arcface")
-        cv2.imwrite(aligned_path, aligned_img)
-        images.append(aligned_filename)
-        uploaded_images = images
-        return uploaded_images
+for model in ModelLoader.models:
+    os.makedirs(os.path.join(STATIC_FOLDER,model), exist_ok=True)
+    
 
 
 def extract_landmark_features(face):
@@ -149,7 +118,9 @@ def upload_image():
     faces_length = []
     valid_images=[]
     generated=[];
+    model_name=request.form.get("model_name","buffalo_l",type=str)
     save_invalid=request.form.get("save_invalid",False,type=bool);
+    model=ModelLoader.load_model(model_name)
     invalid_images=[]
     for image_name, file in files:
         if file and file.filename:
@@ -160,8 +131,8 @@ def upload_image():
                 try:
                     file.save(path)
                     # Generate the embeddings for all faces and store them for future indexing
-                    img,faces=helper.create_aligned_images(file.filename,generated)
-                    _, temp_err = helper.generate_all_emb(img,faces,file.filename)
+                    img,faces=helper.create_aligned_images(file.filename,model,generated)
+                    _, temp_err = helper.generate_all_emb(img,faces,file.filename,model)
                     errors = errors + temp_err
                     faces_length.append(len(faces)) if faces else faces_length.append(0);
                     if len(temp_err) > 0:
@@ -190,31 +161,11 @@ def delete_embeddings():
     manager.delete()
     return jsonify({"result": "success"})
 
-
-# @app.route("/api/clear", methods=["GET"])
-# def clear_image():
-#     #current_detected_images = []
-#     uploaded_images = request.form.getlist("images")
-#     checked_images1 = request.form.get("checked_images1")
-#     checked_images2 = request.form.get("checked_images2")
-#     faces_length = []
-#     messages = []
-#     errors = []
-#     images = []
-#     return jsonify(
-#         {
-#             "images": images,
-#             "faces_length": faces_length,
-#             "errors": errors,
-#             "messages": messages,
-#         }
-#     )
-
-
-
 @app.route("/api/align", methods=["POST"])
 def align_image():
     uploaded_images = request.form.getlist("images")
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
     faces_length = []
     messages = []
     errors = []
@@ -226,7 +177,7 @@ def align_image():
         else:
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            _,faces = helper.create_aligned_images(filename, images)
+            _,faces = helper.create_aligned_images(filename,model, images)
             faces_length.append(len(faces))
             messages.append(f"{len(faces)} detected faces in {filename}.")
         else:
@@ -245,6 +196,8 @@ def align_image():
 def detect_image():
     #current_detected_images = []
     uploaded_images = request.form.getlist("images")
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
     faces_length = []
     messages = []
     errors = []
@@ -252,15 +205,12 @@ def detect_image():
     for i in range(len(uploaded_images)):
         filename = uploaded_images[i]
         if "aligned" in filename or "detected" in filename:
-            path = os.path.join(STATIC_FOLDER, filename)
+            path = os.path.join(STATIC_FOLDER,model_name, filename)
         else:
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            face_count, _ = helper.detect_faces_in_image(filename, images)
-            detected_filename = "detected_" + filename
-            # detected_path = os.path.join(UPLOAD_FOLDER, detected_filename)
-
-            # os.remove(detected_path)
+            
+            face_count, _ = helper.detect_faces_in_image(filename,model, images)
             
             if face_count is not None:
                 faces_length.append(face_count)
@@ -283,8 +233,9 @@ def detect_image():
 
 @app.route("/api/compare", methods=["POST"])
 def compare_image():
-    sort_detected()
     uploaded_images = request.form.getlist("images")
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
     embeddings = []
     messages = []
@@ -293,12 +244,12 @@ def compare_image():
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(filename)
+            embedding = manager.get_embedding_by_name(filename,model_name)
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
                 embedding, temp_err = helper.generate_embedding(
-                    uploaded_images[i], combochanges[i]
+                    uploaded_images[i], combochanges[i],model
                 )
                 # Add the errors and embeddings from the helper function to the local variables
                 errors = errors + temp_err
@@ -335,6 +286,8 @@ def compare_image():
 def improve_image():
    
     image = request.form.get("image")
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
 
     enhanced_image=image
     errors = []
@@ -348,8 +301,8 @@ def improve_image():
                 enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+image)
                 cv2.imwrite(enhanced_image_path, enhanced_img)
                 enhanced_image="enhanced_"+image
-                img,faces=helper.create_aligned_images("enhanced_"+image,[])
-                _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image)
+                img,faces=helper.create_aligned_images("enhanced_"+image,model,[])
+                _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image,model)
                 errors = errors + temp_err
 
                 if len(temp_err) > 0:
@@ -369,9 +322,8 @@ def improve_image():
 
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
-    
-# Get a list of all files in the directory and sort them using the custom sort function
-    sort_detected()
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
 
     uploaded_images = request.form.getlist("images")
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
@@ -382,12 +334,12 @@ def checkisfamily():
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
             aligned_filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(aligned_filename)
+            embedding = manager.get_embedding_by_name(aligned_filename,model_name)
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
                 embedding, temp_err = helper.generate_embedding(
-                    uploaded_images[i], 0
+                    uploaded_images[i], 0,model
                 )
                 # Add the errors and embeddings from the helper function to the local variables
                 errors = errors + temp_err
@@ -417,7 +369,7 @@ def checkisfamily():
         
 
         for i in range(2):
-            img,faces=helper._ImageHelper__extract_faces(uploaded_images[i]);
+            img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],model);
             if faces:
                 Genders[i]=faces[0].gender;
        
@@ -448,44 +400,24 @@ def checkisfamily():
 
 @app.route("/api/check_many", methods=["POST"])
 def find_similar_images():
-    sort_detected()
     errors = []
-    images = []
-    files = request.files.items()
+    messages = []
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
+
+    current_image = request.form.get("image")
+    selected_face = int(request.form.get("selected_face"))
     k = int(request.form.get("number_of_images", 5))
-    with tempfile.TemporaryDirectory() as temp_dir:
-        for image_name, file in files:
-            if file and file.filename:
-                filename = file.filename.replace("_", "")
-                if ImageHelper.allowed_file(filename):
-                    path = os.path.join(temp_dir, filename)
-                    try:
-                        file.save(path)
-                        # Generate the embeddings for all faces and store them for future indexing
-                        embs, temp_err = helper.generate_all_emb(filename, False)
-                        similar = helper.get_similar_images(embs[0], filename, k)
-                        for x in similar:
-                            sim_emb = manager.get_embedding(x["index"])
-                            similarity = util.calculate_similarity(embs[0], sim_emb)
-                            images.append(
-                                {"name": x["name"], "similarity": float(similarity)}
-                            )
-
-                        errors = errors + temp_err
-
-                    except Exception as e:
-                        errors.append(
-                            f"Failed to save {filename} due to error: {str(e)}"
-                        )
-
-                else:
-                    errors.append(f"Invalid file format for {filename}. ")
-    return jsonify({"images": images, "errors": errors})
+    similar,temp_err = helper.get_k_similar_images(current_image,selected_face,model, k)
+    errors = errors + temp_err
+    return jsonify({"images": similar, "errors": errors})
 
 
 @app.route("/api/check", methods=["POST"])
 def find_similar_image():
-    sort_detected()
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
+
     most_similar_image = None
     messages = []
     errors = []
@@ -499,7 +431,7 @@ def find_similar_image():
             most_similar_face_num,
             similarity,
             temp_err,
-            ) = helper.get_most_similar_image(selected_face, current_image)
+            ) = helper.get_most_similar_image(selected_face, current_image,model)
         errors = errors + temp_err
     else:
         errors.append("no images selected for check")
@@ -507,7 +439,8 @@ def find_similar_image():
         messages.append(
             f"The most similar face is no. {most_similar_face_num+1} in image {most_similar_image} with similarity of {similarity:.4f}"
         )
-        _,faces = helper._ImageHelper__extract_faces(most_similar_image)
+        model=ModelLoader.load_model("buffalo_l")
+        _,faces = helper._ImageHelper__extract_faces(most_similar_image,model)
         if faces:
             face_length=len(faces)
     return jsonify(
@@ -553,8 +486,9 @@ def find_by_template():
 
 @app.route("/api/find", methods=["POST"])
 def find_face_in_image():
-    sort_detected()
     filename = request.form.get("image")
+    model_name=request.form.get("model_name","buffalo_l",type=str)
+    model=ModelLoader.load_model(model_name)
     faces_length = [0]
     messages = []
     errors = []
@@ -564,7 +498,7 @@ def find_face_in_image():
     else:
         path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(path):
-        face_count, boxes = helper.detect_faces_in_image(filename, [])
+        face_count, boxes = helper.detect_faces_in_image(filename,model, [])
         faces_length = face_count
         messages.append(f"{face_count} detected faces in {filename}.")
     else:
@@ -581,9 +515,10 @@ def find_face_in_image():
 
 @app.route("/api/filter",methods=["POST"])
 def filter():
+    model_name=request.form.get("model_name","buffalo_l",type=str)
     threshold = float(request.form.get("threshold", 999))
     if threshold<1:
-        deleted=helper.filter(threshold)
+        deleted=helper.filter(threshold,model_name=model_name)
         return jsonify({"success":True,"deleted":deleted})
     return jsonify({"success":False,"error":"threshold must be below 1"})
 
@@ -595,12 +530,13 @@ def ping():
 
 @app.route("/api/cluster", methods=["POST"])
 def get_groups():
+    model_name=request.form.get("model_name","buffalo_l",type=str)
     jsonData=request.get_data();
     data=json.loads(jsonData) if jsonData else {};
     eps=float(data["max_distance"]) if "max_distance" in data else 0.5; 
     min_samples=int(data["min_samples"]) if "min_samples" in data else 4; 
     retrain=data["retrain"] if "retrain" in data else False; 
-    value_groups=helper.cluster_images(eps,min_samples);
+    value_groups=helper.cluster_images(eps,min_samples,model_name);
     if(retrain):
         groups.train_index(value_groups);
         groups.save_index();
@@ -618,10 +554,6 @@ def get_groups():
                 modified_group[group_name]=[image];
     return jsonify(modified_group);
 
-@app.route("/api/video",methods=["POST"])
-def process_video():
-    pass;
-
 
 @app.route("/api/change_group_name", methods=["POST"])
 def change_group_name():
@@ -636,15 +568,13 @@ app.secret_key = "your_secret_key"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
-
-detector = ModelLoader.load_detector(1024)
-detector_zoomed = ModelLoader.load_detector(320)
-embedder = ModelLoader.load_embedder(64)
 manager = ImageEmbeddingManager(APP_DIR)
 groups = ImageGroupRepository()
 helper = ImageHelper(
-    detector, detector_zoomed, embedder, groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
+     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
 )
+ModelLoader.load_model("buffalo_l")
+
 manager.load()
 
 if __name__ == "__main__":

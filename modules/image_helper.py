@@ -1,11 +1,13 @@
 import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
-from . import util;
+from models.similar_image import SimilarImage
+from . import util,image_embedding_manager,image_group_repository;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
-
+from  .model_loader import ModelLoader
+from modules.models.base_model import BaseModel
 class ImageHelper:
   
     ALLOWED_EXTENSIONS = {
@@ -19,28 +21,25 @@ class ImageHelper:
         ".webp"
     }
     # Load model on startup
-    def __init__(self, detector,detector_zoomed,embedder,groups,emb_manager, UPLOAD_FOLDER, STATIC_FOLDER):
-        self.detector = detector
-        self.detector_zoomed = detector_zoomed
-        self.embedder = embedder
+    def __init__(self,groups:image_group_repository.ImageGroupRepository,emb_manager:image_embedding_manager.ImageEmbeddingManager, UPLOAD_FOLDER, STATIC_FOLDER):
         self.UPLOAD_FOLDER = UPLOAD_FOLDER
         self.STATIC_FOLDER = STATIC_FOLDER
         self.groups=groups;
         self.emb_manager=emb_manager;
     
 
-    def __align_single_image(self, face, selected_face, filename, img):
+    def __align_single_image(self, face, selected_face:int, filename:str, img:np.ndarray,model_name:str):
         landmarks = face["kps"].astype(int)
         aligned_filename = f"aligned_{selected_face}_{filename}"
-        aligned_path = os.path.join(self.STATIC_FOLDER, aligned_filename)
+        aligned_path = os.path.join(self.STATIC_FOLDER,model_name, aligned_filename)
         aligned_img = norm_crop(img, landmarks, 112, "arcface")
         cv2.imwrite(aligned_path, aligned_img)
         return aligned_filename
 
 
 
-    def detect_faces_in_image(self, filename, images):
-        img, faces = self.__extract_faces(filename)
+    def detect_faces_in_image(self, filename:str,model:BaseModel, images:list):
+        img, faces = self.__extract_faces(filename,model)
         boxes=[]
         if faces:
             for face in faces:
@@ -56,12 +55,9 @@ class ImageHelper:
                 box=face['bbox'].astype(int).tolist();
                 boxes.append(box)
             detected_filename = "detected_" + filename
-            detected_path = os.path.join(self.STATIC_FOLDER, detected_filename)
+            detected_path = os.path.join(self.STATIC_FOLDER,model.name, detected_filename)
 
-            
-            #img=norm_crop(img, landmarks, 112, "arcface")
-            
-            # message += f"path {detected_path}. "
+
             cv2.imwrite(detected_path, img)
             images.append(detected_filename)
 
@@ -71,40 +67,27 @@ class ImageHelper:
         return len(faces),boxes
         
    
-    def create_aligned_images(self, filename, images):
-        img, faces = self.__extract_faces(filename)
+    def create_aligned_images(self, filename:str,model:BaseModel, images:list):
+        img, faces = self.__extract_faces(filename,model)
         if(not faces):
             return img,None;
         face_count = 0
 
         for face in faces:
             aligned_filename = self.__align_single_image(
-                face, face_count, filename, img
+                face, face_count, filename, img,model.name
             )
             images.append(aligned_filename)
             face_count += 1
         return img,faces;
 
-    def __extract_faces(self, filename):
+    def __extract_faces(self, filename:str,model:BaseModel):
         if filename.startswith("aligned_") or filename.startswith("detected_"):
-            path = os.path.join(self.STATIC_FOLDER, filename)
+            path = os.path.join(self.STATIC_FOLDER,model.name, filename)
         else:
             path = os.path.join(self.UPLOAD_FOLDER, filename)
         img = cv2.imread(path)
-        try:
-            close_faces=self.detector_zoomed.get(img)
-            far_faces=self.detector.get(img)
-            faces=far_faces.copy();
-            for j in range(len(close_faces)):
-                        duplicate=False;
-                        for far_face in far_faces:
-                            if(util.are_bboxes_similar(close_faces[j]['bbox'],far_face['bbox'],20)):
-                                duplicate=True;
-                        if(not duplicate):
-                            faces.append(close_faces[j])
-            return img, faces
-        except Exception as e:
-            return img,None;
+        return img, model.extract_faces(img);
 
 
     @staticmethod
@@ -120,36 +103,27 @@ class ImageHelper:
             print("Error during embedding extraction:", e)  # Debug log
             return None
         
-    def generate_all_emb(self,filename,save=True):
+    def generate_all_emb(self,filename:str,model:BaseModel,save=True):
         errors=[];
-        embedding=None;
         embeddings=[];
-        if self.embedder:
-            img,faces=self.__extract_faces(filename);                
-            if faces:
-                for i in range(len(faces)):
-                    embedding=self.embedder.get(img,faces[i]);
-                    embeddings.append(np.array(embedding));
-                    if(save):
-                        self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}");
-            else:
-                print("No faces detected.")  # Debug log
-                errors.append("No faces detected in one or both images.")
+        if model:
+            img,faces=self.__extract_faces(filename,model);                
+            return self.generate_all_emb(img,faces,filename,model,save);
         else:
             errors.append("Error: Embedder model not initialized.")
         return embeddings,errors;
 
-    def generate_all_emb(self,img,faces,filename,save=True):
+    def generate_all_emb(self,img,faces:list,filename:str,model:BaseModel,save=True):
         errors=[];
         embedding=None;
         embeddings=[];
-        if self.embedder:
+        if model:
             if faces:
                 for i in range(len(faces)):
-                    embedding=self.embedder.get(img,faces[i]);
+                    embedding=model.embed(img,faces[i]);
                     embeddings.append(np.array(embedding));
                     if(save):
-                        self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}");
+                        self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}",model.name);
             else:
                 print("No faces detected.")  # Debug log
                 errors.append("No faces detected in one or both images.")
@@ -231,17 +205,18 @@ class ImageHelper:
 
 
 
-    def generate_embedding(self,filename,selected_face,save=True):
+    def generate_embedding(self,filename:str,selected_face:int,model:BaseModel,save=True)->np.ndarray[np.float32]:
         errors=[];
         embedding=None;
-        if self.embedder:
-            img,faces=self.__extract_faces(filename)
+        model=ModelLoader.load_model("buffalo_l")
+        if model:
+            img,faces=self.__extract_faces(filename,model)
             if faces:
                 if selected_face == -2 or len(faces) == 1:
                     i=0
                 else:
                     i=selected_face
-                embedding=self.embedder.get(img,faces[i]);
+                embedding=model.embed(img,faces[i]);
                 if(save):
                     self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}");
 
@@ -252,22 +227,22 @@ class ImageHelper:
             errors.append("Error: Embedder model not initialized.")
         return embedding,errors;
 
-    def get_similar_images(self,user_embedding,filename,k=5):
+    def get_similar_images(self,user_embedding:list,filename:str,model_name:str,k=5):
         np_emb=np.array(user_embedding).astype("float32").reshape(1,-1)
-        result=self.emb_manager.search(np_emb,k);
+        result=self.emb_manager.search(np_emb,k+1,model_name);
         filtered=[]
         seen_distances=[]
         for r in result:
             if r["distance"] not in seen_distances:
                 seen_distances.append(r["distance"])
                 i=r["index"];
-                name=self.emb_manager.get_name(i);
+                name=self.emb_manager.get_name(i,model_name);
                 if(name.split('_')[-1]!=filename.split('_')[-1]):
                     filtered.append({"index":i,"name":name})
-        valid=[x for x in filtered if len(emb := self.emb_manager.get_embedding(x['index']))>0 
+        valid=[x for x in filtered if len(emb := self.emb_manager.get_embedding(x['index'],model_name))>0 
                 and not np.allclose(emb,user_embedding,rtol=1e-5,atol=1e-8)]
         return valid;
-    def filter(self,threshold):
+    def filter(self,threshold,model_name):
         manager=self.emb_manager
         errors=[]
         original_length=len(manager.db_embeddings["names"]);
@@ -308,7 +283,7 @@ class ImageHelper:
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
         return enhanced
     
-    def get_most_similar_image(self,selected_face,filename):
+    def get_most_similar_image(self,selected_face:int,filename:str,model:BaseModel):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
         most_similar_image=None;
@@ -317,20 +292,20 @@ class ImageHelper:
         facenum=-2;
         temp_err=[]
         aligned_filename=f"aligned_{0 if selected_face == -2 else selected_face}_{filename}";
-        embedding=self.emb_manager.get_embedding_by_name(aligned_filename)
+        embedding=self.emb_manager.get_embedding_by_name(aligned_filename,model.name)
         if len(embedding)>0:
             user_embedding=embedding;
         else:
-            user_embedding,temp_err=self.generate_embedding(filename,selected_face);
+            user_embedding,temp_err=self.generate_embedding(filename,selected_face,model);
             errors=errors+temp_err;
         if len(errors)==0:
-            valid=self.get_similar_images(user_embedding,filename);
+            valid=self.get_similar_images(user_embedding,filename,model.name);
             for image in valid:
                 try:  
                     match=image['name'];
                     _,facenum,filename=match.split('_',2);
                     similarity=util.calculate_similarity(
-                        self.emb_manager.get_embedding(image['index'])
+                        self.emb_manager.get_embedding(image['index'],model.name)
                         ,user_embedding);
                     if(similarity>max_similarity):
                         max_similarity=similarity;
@@ -344,7 +319,36 @@ class ImageHelper:
 
         errors=errors+temp_err;
         return most_similar_image,most_similar_face,max_similarity,errors;
+    def get_k_similar_images(self,filename:str,selected_face:int,model:BaseModel,k=1)->tuple[list[SimilarImage],list[str]]:
+        errors=[]
+        similar_images=[];
+        temp_err=[]
+        aligned_filename=f"aligned_{0 if selected_face == -2 else selected_face}_{filename}";
+        embedding=self.emb_manager.get_embedding_by_name(aligned_filename,model_name=model.name)
+        if len(embedding)>0:
+            user_embedding=embedding;
+        else:
+            user_embedding,temp_err=self.generate_embedding(filename,selected_face,model);
+            errors=errors+temp_err;
+        if len(errors)==0:
+            valid=self.get_similar_images(user_embedding,filename=filename,model_name=model.name,k=k);
+            for image in valid:
+                try:  
+                    match=image['name'];
+                    _,facenum,filename=match.split('_',2);
+                    similarity=util.calculate_similarity(
+                        self.emb_manager.get_embedding(image['index'],model_name=model.name)
+                        ,user_embedding);
+                    similar_model= SimilarImage(filename,facenum,similarity)
+                    similar_images.append(similar_model.to_json())
+                except Exception as e:
+                    # template_matching
+                    print(f"failed to match image {match} because:\n{e}");
+            if len(valid)==0:
+                errors.append("No unique matching faces found!");
 
+        errors=errors+temp_err;
+        return similar_images,errors;
 
     def get_most_similar_image_by_template(self,filename):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
@@ -368,14 +372,12 @@ class ImageHelper:
                         _, max_val, _ , max_loc = cv2.minMaxLoc(result)
                         if max_val >= max_similarity:
                             box=[max_loc[0],max_loc[1],template.shape[1]+max_loc[0],template.shape[0]+max_loc[1]]
-                            # bottom_right = (top_left[0] + w, top_left[1] + h)
-                            # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
                             most_similar_image = entry.name
                             max_similarity =max_val
             cv2.destroyAllWindows();
         return most_similar_image,box,max_similarity,errors;
     
-    def cluster_images(self,max_distance,min_samples):
+    def cluster_images(self,max_distance,min_samples,model_name):
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings
         similarity_matrix = cosine_similarity(self.emb_manager.db_embeddings["embeddings"])
         similarity_matrix = np.clip(similarity_matrix, -1, 1)

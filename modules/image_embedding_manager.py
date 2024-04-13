@@ -2,7 +2,9 @@ import pickle
 import faiss
 import os
 import numpy as np
+from .models.base_model import BaseModel
 import math
+
 class ImageEmbeddingManager:
     def __init__(self,root_path):
         ImageEmbeddingManager.PKL_path=os.path.join(root_path,"static/embeddings.pkl");
@@ -27,7 +29,7 @@ class ImageEmbeddingManager:
         self.index = faiss.IndexHNSWFlat( d,M);
         self.index.add(data);
     
-    def search(self,embedding,k):
+    def search(self,embedding:np.ndarray[np.float32],k:int,model_name:str):
         data=self.db_embeddings["embeddings"];
         # Define the number of clusters (nlist) for the IVFPQ index
         threshold = 25600;
@@ -70,27 +72,27 @@ class ImageEmbeddingManager:
         if(index>-1):
             self.db_embeddings["names"].pop(index);
             self.db_embeddings["embeddings"]=np.delete(self.db_embeddings["embeddings"],index,axis=0);
-    def add_embedding(self,embedding,name):
-        existing=self.get_embedding_by_name(name);
+    def add_embedding(self,embedding:np.ndarray[np.float32],name:str,model_name:str):
+        existing=self.get_embedding_by_name(name,model_name);
         if(len(existing)==0):
             np_emb=np.array(embedding).reshape(1,-1);
             self.db_embeddings["names"].append(name);
             self.db_embeddings["embeddings"]=np.vstack(
             (self.db_embeddings["embeddings"],np_emb));
-    def get_name(self,idx):
+    def get_name(self,idx:int,model_name:str)->str:
         if(len(self.db_embeddings["names"])>0):
             return self.db_embeddings["names"][idx];
         return "";
-    def get_embedding(self,idx):
+    def get_embedding(self,idx:int,model_name:str)->np.ndarray[np.float32]:
         if(len(self.db_embeddings["embeddings"])>0):
             return self.db_embeddings["embeddings"][idx];
         return [];
-    def get_index_by_name(self,name):
+    def get_index_by_name(self,name:str)->int:
         try:
             return self.db_embeddings["names"].index(name);
         except ValueError:
             return -1;
-    def get_embedding_by_name(self,name):
+    def get_embedding_by_name(self,name:str,model_name:str)->np.ndarray[np.float32]:
         try:
             index=self.db_embeddings["names"].index(name);
             return self.db_embeddings["embeddings"][index];

@@ -118,9 +118,8 @@ def upload_image():
     faces_length = []
     valid_images=[]
     generated=[];
-    model_name=request.form.get("model_name","buffalo_l",type=str)
+    return_model_name=request.form.get("model_name","buffalo_l",type=str)
     save_invalid=request.form.get("save_invalid",False,type=bool);
-    model=ModelLoader.load_model(model_name)
     invalid_images=[]
     for image_name, file in files:
         if file and file.filename:
@@ -130,21 +129,33 @@ def upload_image():
                 path = os.path.join(UPLOAD_FOLDER, file.filename)
                 try:
                     file.save(path)
+                    for model_name,_ in ModelLoader.models.items():
+                        model=ModelLoader.load_model(model_name=model_name);
                     # Generate the embeddings for all faces and store them for future indexing
-                    img,faces=helper.create_aligned_images(file.filename,model,generated)
-                    _, temp_err = helper.generate_all_emb(img,faces,file.filename,model)
-                    errors = errors + temp_err
-                    faces_length.append(len(faces)) if faces else faces_length.append(0);
-                    if len(temp_err) > 0:
-                        if(save_invalid):
-                            os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
-                        else:
-                            os.remove(path);
-                        invalid_images.append("no_face/"+file.filename);
-                        current_images.append(None)
-                    else:
-                        current_images.append(file.filename)
-                        valid_images.append(file.filename)
+                        img,faces=helper.create_aligned_images(file.filename,model,generated)
+                        _, temp_err = helper.generate_all_emb(img,faces,file.filename,model)
+                        errors = errors + temp_err
+
+                        if(model_name==return_model_name):
+                            faces_length.append(len(faces)) if faces else faces_length.append(0);
+                            if len(temp_err) > 0:
+                                if(save_invalid):
+                                    os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
+                                else:
+                                    os.remove(path);
+                                    invalid_images.append("no_face/"+file.filename);
+                                    current_images.append(None)
+                            else:
+                                current_images.append(file.filename)
+                                valid_images.append(file.filename)
+                        
+                        if(len(temp_err)>0):
+                            if(save_invalid):
+                                os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
+                            else:
+                                os.remove(path);
+
+                        manager.save(model_name)
                 except Exception as e:
                     tb = traceback.format_exc()
                     errors.append(f"Failed to save {filename} due to error: {str(e)}")
@@ -152,7 +163,6 @@ def upload_image():
             else:
                 errors.append(f"Invalid file format for {file.filename}. ")
 
-    manager.save()
     return jsonify({"images": valid_images,"invalid_images":invalid_images, "faces_length": faces_length, "errors": errors})
 
 
@@ -530,19 +540,19 @@ def ping():
 
 @app.route("/api/cluster", methods=["POST"])
 def get_groups():
-    model_name=request.form.get("model_name","buffalo_l",type=str)
     jsonData=request.get_data();
     data=json.loads(jsonData) if jsonData else {};
     eps=float(data["max_distance"]) if "max_distance" in data else 0.5; 
     min_samples=int(data["min_samples"]) if "min_samples" in data else 4; 
     retrain=data["retrain"] if "retrain" in data else False; 
+    model_name=data["model_name"] if "model_name" in data else "buffalo_l"
     value_groups=helper.cluster_images(eps,min_samples,model_name);
     if(retrain):
-        groups.train_index(value_groups);
-        groups.save_index();
+        groups.train_index(value_groups,model_name);
+        groups.save_index(model_name);
         return jsonify(value_groups);
     modified_group={};
-    index=groups.index;
+    index=groups.groups[model_name].index;
     for cluster_id,images in value_groups.items():
         for image in images:
             group_name=cluster_id;
@@ -560,8 +570,9 @@ def change_group_name():
     data=json.loads(request.get_data());
     old= data['old'];
     new= data['new'];
+    model_name=data["model_name"] if "model_name" in data else "buffalo_l"
     if(old and new and old.strip() and new.strip()):
-        groups.change_group_name(old,new);
+        groups.change_group_name(old,new,model_name);
     return jsonify(success=True);
 
 app.secret_key = "your_secret_key"
@@ -571,11 +582,11 @@ app.config["ROOT_FOLDER"] = APP_DIR
 manager = ImageEmbeddingManager(APP_DIR)
 groups = ImageGroupRepository()
 helper = ImageHelper(
-     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
+    groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
 )
-ModelLoader.load_model("buffalo_l")
-
-manager.load()
+for model_name,_ in ModelLoader.models.items():
+    ModelLoader.load_model(model_name)
+    manager.load(model_name)
 
 if __name__ == "__main__":
     try:

@@ -1,8 +1,7 @@
-from .models.buffalo_l import Buffalo_L
-from .models.base_model import BaseModel
+from .models import Buffalo_L,BaseModel,AntelopeV2
 
 class ModelLoader:
-    models={"buffalo_l":Buffalo_L}
+    models={"buffalo_l":Buffalo_L,"antelopev2":AntelopeV2}
 
     instances={}
 

@@ -218,7 +218,7 @@ class ImageHelper:
                     i=selected_face
                 embedding=model.embed(img,faces[i]);
                 if(save):
-                    self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}");
+                    self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}",model.name);
 
             else:
                 print("No faces detected.")  # Debug log
@@ -377,9 +377,11 @@ class ImageHelper:
             cv2.destroyAllWindows();
         return most_similar_image,box,max_similarity,errors;
     
-    def cluster_images(self,max_distance,min_samples,model_name):
+    def cluster_images(self,max_distance,min_samples,model_name)->dict[int,list[str]]:
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings
-        similarity_matrix = cosine_similarity(self.emb_manager.db_embeddings["embeddings"])
+        if(len(self.emb_manager.db_embeddings[model_name].embeddings)==0):
+            return {}
+        similarity_matrix = cosine_similarity(self.emb_manager.db_embeddings[model_name].embeddings)
         similarity_matrix = np.clip(similarity_matrix, -1, 1)
         # Apply DBSCAN
 
@@ -388,7 +390,7 @@ class ImageHelper:
         unique_values = np.unique(labels)
         index_groups = {value: np.where(labels == value)[0] for value in unique_values}
         value_groups = {
-            int(key): [self.emb_manager.db_embeddings["names"][index] for index in indexes]
+            int(key): [self.emb_manager.db_embeddings[model_name].names[index] for index in indexes]
             for key, indexes in index_groups.items()
         }
         return value_groups;

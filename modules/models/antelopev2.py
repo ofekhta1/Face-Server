@@ -8,15 +8,15 @@ sys.path.append(os.path.abspath('..'))
 from ..util import are_bboxes_similar
 
 
-class Buffalo_L(BaseModel):
+class AntelopeV2(BaseModel):
     def __init__(self) -> None:
         self.embedder= self.__CreateEmbedder(64)
         self.detector_zoomed= self.__CreateDetector(320)
         self.detector= self.__CreateDetector(1024)
-        self.name="buffalo_l"
+        self.name="antelopev2"
     def __CreateEmbedder(self,size):
         try:
-            model_name = 'Models/buffalo_l/w600k_r50.onnx' # Use the face recognition model
+            model_name = 'Models/antelopev2/glintr100.onnx' # Use the face recognition model
             embedder = insightface.model_zoo.get_model(model_name)
             embedder.prepare(ctx_id=1, det_thresh=0.5, det_size=(size, size))
             return embedder
@@ -26,7 +26,7 @@ class Buffalo_L(BaseModel):
             return None
     def __CreateDetector(self,size):
         try:
-            face_analyzer = FaceAnalysis(name="buffalo_l", allowed_modules=["detection","genderage"])
+            face_analyzer = FaceAnalysis(name="antelopev2", allowed_modules=["detection","genderage"])
             face_analyzer.prepare(ctx_id=1, det_thresh=0.75, det_size=(size, size))
             return face_analyzer
 

@@ -5,6 +5,8 @@ from . import util;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
+import matplotlib.pyplot as plt
+
 
 class ImageHelper:
   
@@ -163,7 +165,7 @@ class ImageHelper:
       MIN_MATCH_COUNT = numpoints
       img1 = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE) # queryImage
       img2 = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE) # trainImage
-      sift = cv2.SIFT_create()
+      sift = cv2.SIFT_create(contrastThreshold=0.02, edgeThreshold=100)
       kp1, des1 = sift.detectAndCompute(img1,None)
       kp2, des2 = sift.detectAndCompute(img2,None)
       FLANN_INDEX_KDTREE = 1
@@ -186,23 +188,35 @@ class ImageHelper:
          if(M is not None):
           dst = cv2.perspectiveTransform(pts,M)
           img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+          draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+      singlePointColor = None,
+      matchesMask = matchesMask, # draw only inliers
+      flags = 2)
+          img3 = cv2.drawMatches(img1,kp1,img2,kp2,good,None,**draw_params)
+        #   if 'blake' in image_path:
+        #       plt.imshow(img3, 'gray')
+        #       plt.show(block=True)
+              
+          #print("The object (e.g., tattoo) exists in both images!")
        else:
          #print( "Not enough matches are found - {}/{}".format(len(good), MIN_MATCH_COUNT) )
          matchesMask = None
+      
       draw_params = dict(matchColor = (0,255,0), # draw matches in green color
       singlePointColor = None,
       matchesMask = matchesMask, # draw only inliers
       flags = 2)
       img3 = cv2.drawMatches(img1,kp1,img2,kp2,good,None,**draw_params)
-      if (len(good) >= MIN_MATCH_COUNT) and (max_val>= - 0.2 or len(good)>=60) and M is not None :
-        print("The object (e.g., tattoo) exists in both images!")
-        #plt.imshow(img3, 'gray')
-        #plt.show(block=True)
-        #create_combined_file()
-      else:
-     #plt.imshow(img3, 'gray')
-     #plt.show(block=True)
-         print("The object (e.g., tattoo) does NOT exist or the similarity is too low.")
+    #   plt.imshow(img3, 'gray')
+    #   plt.show(block=True)
+    #   if (len(good) >= MIN_MATCH_COUNT) and (max_val>= - 0.2 or len(good)>=60) and M is not None :
+        #print("The object (e.g., tattoo) exists in both images!")
+      
+        #ImageHelper.create_combined_file()
+    #   else:
+    #  #plt.imshow(img3, 'gray')
+    #  #plt.show(block=True)
+    #      print("The object (e.g., tattoo) does NOT exist or the similarity is too low.")
       if(M is not None):
             return len(good)
       else:
@@ -353,26 +367,67 @@ class ImageHelper:
         max_similarity=-1;
         box=[]
         template=cv2.imread(user_image_path)
-        grayTemplate=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
+        # grayTemplate=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
+        over20 = []
+        max_len=0
+        best_match_score = -1
+        best_match_image_1 = None
+        best_match_image_2=None 
 
         with os.scandir(self.UPLOAD_FOLDER) as entries:
             for entry in entries:
                 if entry.is_file() and ImageHelper.allowed_file(entry.name):
-                    temp_template=grayTemplate.copy();
+                   # temp_template=grayTemplate.copy();
                     if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                        img=cv2.imread(entry.path);
-                        grayImage=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
-                        if temp_template.shape[1] > img.shape[1] or temp_template.shape[0] >img.shape[0]:
-                            temp_template = cv2.resize(temp_template, (img.shape[1],img.shape[0]))
-                        result = cv2.matchTemplate(grayImage, temp_template, cv2.TM_CCOEFF_NORMED)
-                        _, max_val, _ , max_loc = cv2.minMaxLoc(result)
-                        if max_val >= max_similarity:
-                            box=[max_loc[0],max_loc[1],template.shape[1]+max_loc[0],template.shape[0]+max_loc[1]]
-                            # bottom_right = (top_left[0] + w, top_left[1] + h)
-                            # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
-                            most_similar_image = entry.name
-                            max_similarity =max_val
-            cv2.destroyAllWindows();
+                        # if filename.endswith('.jpg') or filename.endswith('.png'):
+                        #  image_path = os.path.join(image_dir, filename)
+                        #  image = cv2.imread(image_path)
+                        image = cv2.imread(entry.path)
+                        if image is not None:
+                            #  image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                             img2 = image.copy()
+                             scaling_factor = img2.shape[0] / template.shape[0]  
+                             resized_template = cv2.resize(template, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
+                             result = cv2.matchTemplate(img2, resized_template, cv2.TM_CCOEFF_NORMED)
+                             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                            #  if("GettyImages-1428204245_re_autoOrient_i" in entry.name):
+                            #      i=1
+                             if max_val > 0.3:
+                              over20.append((max_val, entry.path))
+ 
+                             if max_val > best_match_score and max_val <= 1:
+                              best_match_score = max_val
+                              best_match_image_1 = entry.name
+                        
+                        # img=cv2.imread(entry.path);
+                        # if img is not None:
+                        #  grayImage=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
+                        #  if temp_template.shape[1] > img.shape[1] or temp_template.shape[0] >img.shape[0]:
+                        #      temp_template = cv2.resize(temp_template, (img.shape[1],img.shape[0]))
+                        #  result = cv2.matchTemplate(grayImage, temp_template, cv2.TM_CCOEFF_NORMED)
+                        #  _, max_val, _ , max_loc = cv2.minMaxLoc(result)
+                        #  full_path=os.path.join(self.UPLOAD_FOLDER,filename)
+                        #  leng=  ImageHelper.points(4,max_similarity,full_path,entry.path)
+                        #  #leng=  ImageHelper.points(4,max_similarity,full_path,entry.path)
+                        #  if max_val >= max_similarity:
+                        #      box=[max_loc[0],max_loc[1],template.shape[1]+max_loc[0],template.shape[0]+max_loc[1]]
+                        #     # bottom_right = (top_left[0] + w, top_left[1] + h)
+                        #     # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 2)
+                        #      most_similar_image = entry.name
+                        #      max_similarity =max_val
+                        #      #leng=  ImageHelper.points(4,max_similarity,full_path,entry.path)
+            #cv2.destroyAllWindows();
+        for file in over20:
+         leng=  ImageHelper.points(4,file[0],user_image_path,file[1])
+         if(max_len<leng):
+           max_len=leng
+           best_match_image_2=file[1]
+           filenamesift = os.path.basename(best_match_image_2)
+        if(best_match_image_1!=best_match_image_2):
+         if(max_len>30):
+           most_similar_image=filenamesift
+         else:
+          most_similar_image=best_match_image_1
         return most_similar_image,box,max_similarity,errors;
     
     def cluster_images(self,max_distance,min_samples):

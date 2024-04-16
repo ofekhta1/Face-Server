@@ -16,7 +16,7 @@ class Buffalo_L(BaseModel):
         self.name="buffalo_l"
     def __CreateEmbedder(self,size):
         try:
-            model_name = 'Models/buffalo_l/w600k_r50.onnx' # Use the face recognition model
+            model_name = 'OnnxModels/buffalo_l/w600k_r50.onnx' # Use the face recognition model
             embedder = insightface.model_zoo.get_model(model_name)
             embedder.prepare(ctx_id=1, det_thresh=0.5, det_size=(size, size))
             return embedder

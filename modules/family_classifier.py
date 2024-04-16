@@ -5,7 +5,7 @@ import numpy as np;
 class FamilyClassifier:
 
     def __init__(self,root_path):
-        models_path=os.path.join(root_path,"Models");
+        models_path=os.path.join(root_path,"OnnxModels");
         with open(os.path.join(models_path,"family_classifier_model.pkl"), "rb") as model_file:
             self.model = pickle.load(model_file);
         with open(os.path.join(models_path,"scaler.pkl"), "rb") as scaler_file:

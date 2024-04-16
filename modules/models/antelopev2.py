@@ -16,7 +16,7 @@ class AntelopeV2(BaseModel):
         self.name="antelopev2"
     def __CreateEmbedder(self,size):
         try:
-            model_name = 'Models/antelopev2/glintr100.onnx' # Use the face recognition model
+            model_name = 'OnnxModels/antelopev2/glintr100.onnx' # Use the face recognition model
             embedder = insightface.model_zoo.get_model(model_name)
             embedder.prepare(ctx_id=1, det_thresh=0.5, det_size=(size, size))
             return embedder

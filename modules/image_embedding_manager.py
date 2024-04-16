@@ -14,9 +14,10 @@ class ImageEmbeddingManager:
         self.db_embeddings:dict[str,StoredModelEmbeddings]={};
         for model_name,_ in ModelLoader.models.items():
             PKL_PATH=os.path.join(root_path,"static",model_name,"embeddings.pkl");
-            self.db_embeddings[model_name]= StoredModelEmbeddings([],np.empty((0,512),dtype="float32"),pkl_path=PKL_PATH)
+            self.db_embeddings[model_name]= StoredModelEmbeddings([],{},np.empty((0,512),dtype="float32"),pkl_path=PKL_PATH)
 
-
+    def set_face_count(self,filename:str,face_count:int,model_name:str):
+        self.db_embeddings[model_name].set_face_count(filename,face_count);
     def add_embedding(self,embedding:np.ndarray[np.float32],name:str,model_name:str):
         self.db_embeddings[model_name].add_embedding(embedding,name);
     
@@ -28,6 +29,9 @@ class ImageEmbeddingManager:
 
     def get_embedding(self,idx:int,model_name:str)->np.ndarray[np.float32]:
         return self.db_embeddings[model_name].get_embedding(idx);
+
+    def get_face_count_by_filename(self,filename:str,model_name:str)->int:
+        return self.db_embeddings[model_name].get_face_count_by_filename(filename);
 
     def get_index_by_name(self,name:str,model_name:str)->int:
         return self.db_embeddings[model_name].get_index_by_name(name);

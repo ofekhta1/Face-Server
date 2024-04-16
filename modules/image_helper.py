@@ -67,19 +67,20 @@ class ImageHelper:
         return len(faces),boxes
         
    
-    def create_aligned_images(self, filename:str,model:BaseModel, images:list):
+    def create_aligned_images(self, filename:str,model:BaseModel, images:list,save=True)->tuple[np.typing.NDArray[np.uint8],list,list[str]]:
         img, faces = self.__extract_faces(filename,model)
+        errors=[]
         if(not faces):
-            return img,None;
-        face_count = 0
+            print("No faces detected.")  # Debug log
+            errors.append("No faces detected in one or both images.")
+            return img,None,[],errors;
 
-        for face in faces:
+        for i in range(len(faces)):
             aligned_filename = self.__align_single_image(
-                face, face_count, filename, img,model.name
+                faces[i], i, filename, img,model.name
             )
             images.append(aligned_filename)
-            face_count += 1
-        return img,faces;
+        return img,faces,errors;
 
     def __extract_faces(self, filename:str,model:BaseModel):
         if filename.startswith("aligned_") or filename.startswith("detected_"):
@@ -113,23 +114,46 @@ class ImageHelper:
             errors.append("Error: Embedder model not initialized.")
         return embeddings,errors;
 
-    def generate_all_emb(self,img,faces:list,filename:str,model:BaseModel,save=True):
-        errors=[];
-        embedding=None;
-        embeddings=[];
-        if model:
-            if faces:
-                for i in range(len(faces)):
-                    embedding=model.embed(img,faces[i]);
-                    embeddings.append(np.array(embedding));
-                    if(save):
-                        self.emb_manager.add_embedding(embedding,f"aligned_{i}_{filename}",model.name);
-            else:
-                print("No faces detected.")  # Debug log
-                errors.append("No faces detected in one or both images.")
-        else:
-            errors.append("Error: Embedder model not initialized.")
-        return embeddings,errors;
+    def generate_all_emb(self,img,faces:list,filename:str,model:BaseModel,save=True)->tuple[np.typing.NDArray[np.uint8],list,list[np.ndarray],list[str]]:
+        errors=[]
+        if(not faces):
+            print("No faces detected.")  # Debug log
+            errors.append("No faces detected in one or both images.")
+            return img,None,[],errors;
+    
+        aligned_images=[]
+        embeddings=[]
+        for i in range(len(faces)):
+            embedding=model.embed(img,faces[i]);
+            embeddings.append(np.array(embedding));
+            aligned_filename = f"aligned_{i}_{filename}";
+
+            aligned_images.append(aligned_filename)
+            # face_count += 1
+
+
+        #dedup code
+        
+        similarity_matrix = cosine_similarity(embeddings)
+        similarity_matrix = np.clip(similarity_matrix, -1, 1)
+        # Apply DBSCAN
+
+        dbscan = DBSCAN(eps=0.1, min_samples=2, metric="precomputed")
+        labels = dbscan.fit_predict(1 - similarity_matrix)  # Convert similarity to distance
+        unique_values = np.unique(labels)[1:]#remove -1
+        index_groups = {value: np.where(labels == value)[0] for value in unique_values}
+        for group in index_groups:
+            for dups_index in index_groups[group][1:]:
+                embeddings.pop(dups_index)
+                os.remove(os.path.join(self.STATIC_FOLDER,model.name,aligned_images[dups_index]))
+                faces.pop(dups_index)
+                aligned_images.pop(dups_index)
+       
+        if(save):
+            for i in range(len(faces)):        
+                self.emb_manager.add_embedding(embeddings[i],aligned_images[i],model.name);
+        self.emb_manager.set_face_count(filename,len(faces),model_name=model.name)
+        return img,faces,embeddings,errors;
 
 
     @staticmethod
@@ -245,19 +269,19 @@ class ImageHelper:
     def filter(self,threshold,model_name):
         manager=self.emb_manager
         errors=[]
-        original_length=len(manager.db_embeddings["names"]);
-        for name in manager.db_embeddings["names"]:
-            embedding=manager.get_embedding_by_name(name)
-            valid=self.get_similar_images(embedding,name.split('_')[-1]);
+        original_length=len(manager.db_embeddings[model_name].names);
+        for name in manager.db_embeddings[model_name].names:
+            embedding=manager.get_embedding_by_name(name,model_name)
+            valid=self.get_similar_images(embedding,name.split('_')[-1],model_name);
             for image in valid:            
-                match=image['name'];
-                _,facenum,filename=match.split('_');
+                match:str=image['name'];
+                _,facenum,filename=match.split('_',2);
                 similarity=util.calculate_similarity(
-                    self.emb_manager.get_embedding(image['index'])
+                    self.emb_manager.get_embedding(image['index'],model_name)
                     ,embedding);
                 if(similarity>threshold):
-                    manager.remove_embedding_by_index(image['index']);
-        filtered_length=len(manager.db_embeddings["names"]);
+                    manager.remove_embedding_by_index(image['index'],model_name);
+        filtered_length=len(manager.db_embeddings[model_name].names);
         return original_length-filtered_length;
 
     def enhance_image(self,filename):

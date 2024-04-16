@@ -132,8 +132,8 @@ def upload_image():
                     for model_name,_ in ModelLoader.models.items():
                         model=ModelLoader.load_model(model_name=model_name);
                     # Generate the embeddings for all faces and store them for future indexing
-                        img,faces=helper.create_aligned_images(file.filename,model,generated)
-                        _, temp_err = helper.generate_all_emb(img,faces,file.filename,model)
+                        img,faces,temp_err=helper.create_aligned_images(file.filename,model,generated)
+                        _,_,_,temp_err = helper.generate_all_emb(img,faces,file.filename,model)
                         errors = errors + temp_err
 
                         if(model_name==return_model_name):
@@ -311,8 +311,9 @@ def improve_image():
                 enhanced_image_path = os.path.join(UPLOAD_FOLDER,"enhanced_"+image)
                 cv2.imwrite(enhanced_image_path, enhanced_img)
                 enhanced_image="enhanced_"+image
-                img,faces=helper.create_aligned_images("enhanced_"+image,model,[])
-                _, temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image,model)
+
+                img,faces,temp_err=helper.create_aligned_images("enhanced_"+image,model,[])
+                _,_,_,temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image,model)
                 errors = errors + temp_err
 
                 if len(temp_err) > 0:
@@ -449,10 +450,7 @@ def find_similar_image():
         messages.append(
             f"The most similar face is no. {most_similar_face_num+1} in image {most_similar_image} with similarity of {similarity:.4f}"
         )
-        model=ModelLoader.load_model("buffalo_l")
-        _,faces = helper._ImageHelper__extract_faces(most_similar_image,model)
-        if faces:
-            face_length=len(faces)
+        face_length = helper.emb_manager.get_face_count_by_filename(most_similar_image,model_name)
     return jsonify(
         {
             "image": most_similar_image,

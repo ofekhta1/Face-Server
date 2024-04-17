@@ -76,7 +76,7 @@ class ImageHelper:
         if(not faces):
             print("No faces detected.")  # Debug log
             errors.append("No faces detected in one or both images.")
-            return img,None,[],errors;
+            return img,None,errors;
 
         for i in range(len(faces)):
             aligned_filename = self.__align_single_image(
@@ -126,6 +126,7 @@ class ImageHelper:
     
         aligned_images=[]
         embeddings=[]
+
         for i in range(len(faces)):
             embedding=model.embed(img,faces[i]);
             embeddings.append(np.array(embedding));
@@ -143,20 +144,24 @@ class ImageHelper:
 
         dbscan = DBSCAN(eps=0.1, min_samples=2, metric="precomputed")
         labels = dbscan.fit_predict(1 - similarity_matrix)  # Convert similarity to distance
-        unique_values = np.unique(labels)[1:]#remove -1
+        unique_values=np.unique(labels);
+        unique_values = np.delete(unique_values,np.where(unique_values == -1))#remove -1
         index_groups = {value: np.where(labels == value)[0] for value in unique_values}
         for group in index_groups:
             for dups_index in index_groups[group][1:]:
-                embeddings.pop(dups_index)
                 os.remove(os.path.join(self.STATIC_FOLDER,model.name,aligned_images[dups_index]))
-                faces.pop(dups_index)
-                aligned_images.pop(dups_index)
-       
+                embeddings[dups_index]=None
+                faces[dups_index]=None
+                aligned_images[dups_index]=None
+
+        filtered_embeddings=[e for e in embeddings if e is not None]
+        filtered_faces=[f for f in faces if f is not None]
+        filtered_aligned_images=[ai for ai in aligned_images if ai is not None]
         if(save):
-            for i in range(len(faces)):        
-                self.emb_manager.add_embedding(embeddings[i],aligned_images[i],model.name);
-        self.emb_manager.set_face_count(filename,len(faces),model_name=model.name)
-        return img,faces,embeddings,errors;
+            for i in range(len(filtered_faces)):        
+                self.emb_manager.add_embedding(filtered_embeddings[i],filtered_aligned_images[i],model.name);
+        self.emb_manager.set_face_count(filename,len(filtered_faces),model_name=model.name)
+        return img,filtered_faces,filtered_embeddings,errors;
 
 
     @staticmethod
@@ -393,10 +398,8 @@ class ImageHelper:
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
         most_similar_image=None;
-        max_similarity=-1;
         box=[]
-        template=cv2.imread(user_image_path)
-        # grayTemplate=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
+        template=cv2.imread(user_image_path,cv2.IMREAD_GRAYSCALE)
         over20 = []
         max_len=0
         best_match_score = -1
@@ -406,28 +409,22 @@ class ImageHelper:
         with os.scandir(self.UPLOAD_FOLDER) as entries:
             for entry in entries:
                 if entry.is_file() and ImageHelper.allowed_file(entry.name):
-                   # temp_template=grayTemplate.copy();
                     if (entry.name != filename) and (filename not in entry.name) and (entry.name != filename.replace("enhanced_", "")):
-                        # if filename.endswith('.jpg') or filename.endswith('.png'):
-                        #  image_path = os.path.join(image_dir, filename)
-                        #  image = cv2.imread(image_path)
-                        image = cv2.imread(entry.path)
+                        image = cv2.imread(entry.path,cv2.IMREAD_GRAYSCALE)
                         if image is not None:
-                            #  image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                              img2 = image.copy()
                              scaling_factor = img2.shape[0] / template.shape[0]  
                              resized_template = cv2.resize(template, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
                              result = cv2.matchTemplate(img2, resized_template, cv2.TM_CCOEFF_NORMED)
                              min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                            #  if("GettyImages-1428204245_re_autoOrient_i" in entry.name):
-                            #      i=1
                              if max_val > 0.3:
-                              over20.append((max_val, entry.path))
+                                over20.append((max_val, entry.path))
  
                              if max_val > best_match_score and max_val <= 1:
-                              best_match_score = max_val
-                              best_match_image_1 = entry.name
-                        
+                                best_match_score = max_val
+                                best_match_image_1 = entry.name
+                                box=[max_loc[0],max_loc[1],template.shape[1]+max_loc[0],template.shape[0]+max_loc[1]]
+
                         # img=cv2.imread(entry.path);
                         # if img is not None:
                         #  grayImage=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);
@@ -457,7 +454,7 @@ class ImageHelper:
            most_similar_image=filenamesift
          else:
           most_similar_image=best_match_image_1
-        return most_similar_image,box,max_similarity,errors;
+        return most_similar_image,box,best_match_score,errors;
     
     def cluster_images(self,max_distance,min_samples,model_name)->dict[int,list[str]]:
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings

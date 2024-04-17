@@ -1,18 +1,16 @@
 from flask import Flask, request, session, jsonify
 import os
 import cv2
-import numpy as np
-import tempfile
+import sys
 from modules import ImageEmbeddingManager,ImageHelper,ImageGroupRepository,FamilyClassifier,ModelLoader,util
 from flask_cors import CORS
 from insightface.utils.face_align import norm_crop
 from flask import send_from_directory
 import json
 import traceback
-APP_DIR = os.path.dirname(__file__)
-
+APP_DIR = os.path.dirname(sys.argv[0])
 UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
-STATIC_FOLDER = os.path.join(APP_DIR, "static")
+STATIC_FOLDER = os.path.join(APP_DIR,"static")
 
 # Create the folders if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -64,7 +62,7 @@ def format_landmarks_as_string(landmarks):
 
 
 
-app = Flask(__name__, static_folder=STATIC_FOLDER)
+app = Flask(__name__, static_folder="static")
 
 cors = CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
 app.config["CORS_HEADERS"] = "Content-Type"
@@ -72,12 +70,12 @@ app.config["CORS_HEADERS"] = "Content-Type"
 
 @app.route("/pool/<path:filename>")
 def custom_static(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    return send_from_directory("pool", filename)
 
 
 @app.route("/static_images/<path:filename>")
 def processed_static(filename):
-    return send_from_directory(STATIC_FOLDER, filename)
+    return send_from_directory("static", filename)
 
 
 def check_uploaded_images(filename, image_helper_instance):
@@ -133,27 +131,21 @@ def upload_image():
                         model=ModelLoader.load_model(model_name=model_name);
                     # Generate the embeddings for all faces and store them for future indexing
                         img,faces,temp_err=helper.create_aligned_images(file.filename,model,generated)
-                        _,_,_,temp_err = helper.generate_all_emb(img,faces,file.filename,model)
+                        img,faces,_,temp_err = helper.generate_all_emb(img,faces,file.filename,model)
                         errors = errors + temp_err
 
                         if(model_name==return_model_name):
                             faces_length.append(len(faces)) if faces else faces_length.append(0);
-                            if len(temp_err) > 0:
+                            if len(temp_err) > 0 or (not faces):
                                 if(save_invalid):
                                     os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
                                 else:
                                     os.remove(path);
-                                    invalid_images.append("no_face/"+file.filename);
-                                    current_images.append(None)
+                                invalid_images.append("no_face/"+file.filename);
+                                current_images.append(None)
                             else:
                                 current_images.append(file.filename)
                                 valid_images.append(file.filename)
-                        
-                        if(len(temp_err)>0):
-                            if(save_invalid):
-                                os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
-                            else:
-                                os.remove(path);
 
                         manager.save(model_name)
                 except Exception as e:
@@ -393,12 +385,13 @@ def checkisfamily():
         # landmarks1= "[16. 19. 48. 18. 33. 33. 19. 42. 46. 41.]"
 
         # landmarks2="[18. 21. 47. 21. 32. 39. 20. 44. 47. 44.]"
-
-        is_same_family=classifier.predict(similarity,Genders[0],Genders[1]);
+        threshold=0.5
+        probability=classifier.predict(similarity,Genders[0],Genders[1]);
+        is_same_family= probability>threshold
         messages.append(
-            "Probably the Same Family"
+            f"Probably the Same Family with probability {probability}"
             if is_same_family
-            else "Probably Not the Same Family"
+            else f"Probably Not the Same Family with probability {probability}"
         )
 
     return jsonify(
@@ -442,7 +435,7 @@ def find_similar_image():
             most_similar_face_num,
             similarity,
             temp_err,
-            ) = helper.get_most_similar_image(selected_face, current_image,model)
+        ) = helper.get_most_similar_image(selected_face, current_image,model)
         errors = errors + temp_err
     else:
         errors.append("no images selected for check")
@@ -578,7 +571,7 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
 manager = ImageEmbeddingManager(APP_DIR)
-groups = ImageGroupRepository()
+groups = ImageGroupRepository(APP_DIR)
 helper = ImageHelper(
     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
 )

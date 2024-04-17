@@ -21,8 +21,8 @@ class FamilyClassifier:
         }
         features =self.__create_features(pd.DataFrame([new_data]))
         features_scaled = self.scaler.transform(features)
-        prediction = self.model.predict(features_scaled)
-        return prediction[0]        
+        prediction = self.model.predict_proba(features_scaled)[0][1]
+        return prediction
         
     def __create_features(self,df):
         features = []

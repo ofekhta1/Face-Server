@@ -9,7 +9,7 @@ from .model_loader import ModelLoader
 import math
 
 class ImageEmbeddingManager:
-    def __init__(self,root_path):
+    def __init__(self,root_path:str):
         
         self.db_embeddings:dict[str,StoredModelEmbeddings]={};
         for model_name,_ in ModelLoader.models.items():

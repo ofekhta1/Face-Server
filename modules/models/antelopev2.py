@@ -10,13 +10,14 @@ from ..util import are_bboxes_similar
 
 class AntelopeV2(BaseModel):
     def __init__(self) -> None:
+        self.name="antelopev2"
         self.embedder= self.__CreateEmbedder(64)
         self.detector_zoomed= self.__CreateDetector(320)
         self.detector= self.__CreateDetector(1024)
-        self.name="antelopev2"
     def __CreateEmbedder(self,size):
         try:
-            model_name = 'OnnxModels/antelopev2/glintr100.onnx' # Use the face recognition model
+            base_path=os.path.dirname(sys.argv[0])
+            model_name = os.path.join(base_path,"OnnxModels",self.name,"glintr100.onnx")
             embedder = insightface.model_zoo.get_model(model_name)
             embedder.prepare(ctx_id=1, det_thresh=0.5, det_size=(size, size))
             return embedder

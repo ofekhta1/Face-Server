@@ -6,10 +6,10 @@ from models.stored_group import StoredModelGroup
 from .model_loader import ModelLoader
 
 class ImageGroupRepository:
-    def __init__(self):
+    def __init__(self,root_path:str):
         self.groups:dict[str,StoredModelGroup]={};
         for model_name,_ in ModelLoader.models.items():
-            PKL_PATH=os.path.join("static",model_name,"groups.pkl");
+            PKL_PATH=os.path.join(root_path,"static",model_name,"groups.pkl");
             self.groups[model_name]= StoredModelGroup({},PKL_PATH=PKL_PATH)
             self.load_index(model_name);
  

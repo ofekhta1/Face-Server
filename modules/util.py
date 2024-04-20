@@ -1,5 +1,4 @@
 import numpy as np
-from PIL import Image
 def euclidean_distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 

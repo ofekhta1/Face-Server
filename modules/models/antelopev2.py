@@ -2,7 +2,7 @@ import sys
 import os
 import traceback
 import insightface
-from insightface.app import FaceAnalysis
+from .face_analysis import FaceAnalysis
 from .base_model import BaseModel
 sys.path.append(os.path.abspath('..'))
 from ..util import are_bboxes_similar

@@ -1,4 +1,5 @@
 import numpy as np
+import os
 def euclidean_distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 
@@ -25,5 +26,10 @@ def string_to_numpy_array(string):
     # Converting the list of floats to a numpy array
     return np.array(float_values)
 
+def norm_path(path):
+    if os.name == 'nt':  # Windows
+        return path.replace('/', '\\')
+    else:  # Linux, macOS, etc.
+        return path.replace('\\', '/')        
 
 

@@ -326,6 +326,7 @@ def improve_image():
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
     model_name=request.form.get("model_name","buffalo_l",type=str)
+    similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
     model=ModelLoader.load_model(model_name)
 
     uploaded_images = request.form.getlist("images")
@@ -385,13 +386,12 @@ def checkisfamily():
         # landmarks1= "[16. 19. 48. 18. 33. 33. 19. 42. 46. 41.]"
 
         # landmarks2="[18. 21. 47. 21. 32. 39. 20. 44. 47. 44.]"
-        threshold=0.5
         probability=classifier.predict(similarity,Genders[0],Genders[1]);
-        is_same_family= probability>threshold
+        is_same_family= probability>similarity_thresh
         messages.append(
-            f"Probably the Same Family with probability {probability}"
+            f"Probably the Same Family with probability {probability:.2f}"
             if is_same_family
-            else f"Probably Not the Same Family with probability {probability}"
+            else f"Probably Not the Same Family with probability {probability:.2f}"
         )
 
     return jsonify(
@@ -420,6 +420,7 @@ def find_similar_images():
 @app.route("/api/check", methods=["POST"])
 def find_similar_image():
     model_name=request.form.get("model_name","buffalo_l",type=str)
+    similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
     model=ModelLoader.load_model(model_name)
 
     most_similar_image = None
@@ -435,7 +436,7 @@ def find_similar_image():
             most_similar_face_num,
             similarity,
             temp_err,
-        ) = helper.get_most_similar_image(selected_face, current_image,model)
+        ) = helper.get_most_similar_image(selected_face, current_image,similarity_thresh,model)
         errors = errors + temp_err
     else:
         errors.append("no images selected for check")

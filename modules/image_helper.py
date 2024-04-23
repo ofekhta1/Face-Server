@@ -327,7 +327,7 @@ class ImageHelper:
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
         return enhanced
     
-    def get_most_similar_image(self,selected_face:int,filename:str,model:BaseModel):
+    def get_most_similar_image(self,selected_face:int,filename:str,threshold:float,model:BaseModel):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
         most_similar_image=None;
@@ -351,7 +351,7 @@ class ImageHelper:
                     similarity=util.calculate_similarity(
                         self.emb_manager.get_embedding(image['index'],model.name)
                         ,user_embedding);
-                    if(similarity>max_similarity):
+                    if(similarity>max_similarity and similarity>threshold):
                         max_similarity=similarity;
                         most_similar_image=filename;
                         most_similar_face=int(facenum);
@@ -360,7 +360,8 @@ class ImageHelper:
                     print(f"failed to match image {match} because:\n{e}");
             if len(valid)==0:
                 errors.append("No unique matching faces found!");
-
+            elif(max_similarity==-1):
+                errors.append(f"No matching faces found with sufficient similarity");
         errors=errors+temp_err;
         return most_similar_image,most_similar_face,max_similarity,errors;
     def get_k_similar_images(self,filename:str,selected_face:int,model:BaseModel,k=1)->tuple[list[SimilarImage],list[str]]:

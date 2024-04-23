@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredModelEmbeddings
 from .model_loader import ModelLoader
 import math
-
+from .util import norm_path
 class ImageEmbeddingManager:
     def __init__(self,root_path:str):
         
@@ -76,18 +76,21 @@ class ImageEmbeddingManager:
     def delete(self,model_name:str):
         copy=self.db_embeddings[model_name];
         self.db_embeddings[model_name]=StoredModelEmbeddings(names=[],embeddings=np.empty((0, 512), dtype='float32'),pkl_path=copy.PKL_PATH);
-        if os.path.exists(copy.PKL_PATH):
-            os.remove(copy.PKL_PATH);
+        path=norm_path(copy.PKL_PATH)
+        if os.path.exists(path):
+            os.remove(path);
     
     def save(self,model_name:str):
         data=self.db_embeddings[model_name];
-        with open(data.PKL_PATH, 'wb') as file:
+        path=norm_path(data.PKL_PATH)
+        with open(path, 'wb') as file:
             pickle.dump(data, file)
 
     def load(self,model_name):
         data=self.db_embeddings[model_name];
-        if os.path.exists(data.PKL_PATH):
-            with open(data.PKL_PATH, 'rb') as file:
+        path=norm_path(data.PKL_PATH)
+        if os.path.exists(path):
+            with open(path, 'rb') as file:
                 self.db_embeddings[model_name] = pickle.load(file)
 
     def find_closest_vector(self,data:StoredModelEmbeddings,new_vector:np.ndarray[np.float32],k:int):

@@ -20,10 +20,11 @@ from insightface.app.common import Face
 __all__ = ['FaceAnalysis']
 
 class FaceAnalysis:
-    def __init__(self, name=DEFAULT_MP_NAME, allowed_modules=None, **kwargs):
+    def __init__(self, name=DEFAULT_MP_NAME, allowed_modules=None,root="", **kwargs):
         onnxruntime.set_default_logger_severity(3)
         self.models = {}
-        self.model_dir = ensure_available('OnnxModels', name, root="")
+        # self.model_dir = ensure_available('OnnxModels', name, root="")
+        self.model_dir = osp.join(root,'OnnxModels', name )
         onnx_files = glob.glob(osp.join(self.model_dir, '*.onnx'))
         onnx_files = sorted(onnx_files)
         for onnx_file in onnx_files:

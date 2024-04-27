@@ -1,6 +1,6 @@
 import json
 class SimilarImage:
-    def __init__(self, image_name, face_num, similarity):
+    def __init__(self, image_name:str, face_num:int, similarity:float):
         self.image_name = image_name
         self.face_num = face_num
         self.similarity = similarity

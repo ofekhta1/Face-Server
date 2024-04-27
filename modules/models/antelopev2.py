@@ -9,12 +9,12 @@ from ..util import are_bboxes_similar
 
 
 class AntelopeV2(BaseModel):
-    def __init__(self) -> None:
+    def __init__(self,root=""):
         self.name="antelopev2"
-        self.embedder= self.__CreateEmbedder(64)
-        self.detector_zoomed= self.__CreateDetector(320)
-        self.detector= self.__CreateDetector(1024)
-    def __CreateEmbedder(self,size):
+        self.embedder= self.__CreateEmbedder(64,root)
+        self.detector_zoomed= self.__CreateDetector(320,root)
+        self.detector= self.__CreateDetector(1024,root)
+    def __CreateEmbedder(self,size,root):
         try:
             base_path=os.path.dirname(sys.argv[0])
             model_name = os.path.join(base_path,"OnnxModels",self.name,"glintr100.onnx")
@@ -25,9 +25,9 @@ class AntelopeV2(BaseModel):
             tb = traceback.format_exc()
             print("Error during model initialization:", e)
             return None
-    def __CreateDetector(self,size):
+    def __CreateDetector(self,size,root):
         try:
-            face_analyzer = FaceAnalysis(name="antelopev2", allowed_modules=["detection","genderage"])
+            face_analyzer = FaceAnalysis(name="antelopev2",root=root, allowed_modules=["detection","genderage"])
             face_analyzer.prepare(ctx_id=1, det_thresh=0.75, det_size=(size, size))
             return face_analyzer
 

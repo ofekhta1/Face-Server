@@ -160,7 +160,7 @@ def upload_image():
 
 @app.route("/api/delete", methods=["GET"])
 def delete_embeddings():
-    manager.delete()
+    manager.delete_all()
     return jsonify({"result": "success"})
 
 @app.route("/api/align", methods=["POST"])
@@ -236,6 +236,7 @@ def detect_image():
 @app.route("/api/compare", methods=["POST"])
 def compare_image():
     uploaded_images = request.form.getlist("images")
+    similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
     model_name=request.form.get("model_name","buffalo_l",type=str)
     model=ModelLoader.load_model(model_name)
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
@@ -246,7 +247,7 @@ def compare_image():
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(filename,model_name)
+            embedding = manager.get_embedding_by_name(filename,model_name).embedding
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
@@ -266,10 +267,10 @@ def compare_image():
         # Calculate similarity between the two images
         similarity = util.calculate_similarity(embeddings[0], embeddings[1])
         messages.append(f"Similarity: {similarity:.4f}")
-        if similarity >= 0.6518:
-            messages.append("THIS IS PROBABLY THE SAME PERSON")
+        if similarity >= similarity_thresh:
+            messages.append(f"THIS IS PROBABLY THE SAME PERSON ")
         else:
-            messages.append("THIS IS PROBABLY NOT THE SAME PERSON")
+            messages.append(f"THIS IS PROBABLY NOT THE SAME PERSON")
 
     elif len(uploaded_images) != 2:
         errors.append("choose 2 images!")
@@ -338,7 +339,7 @@ def checkisfamily():
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
             aligned_filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(aligned_filename,model_name)
+            embedding = manager.get_embedding_by_name(aligned_filename,model_name).embedding
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
@@ -408,13 +409,14 @@ def find_similar_images():
     messages = []
     model_name=request.form.get("model_name","buffalo_l",type=str)
     model=ModelLoader.load_model(model_name)
-
+    similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
     current_image = request.form.get("image")
     selected_face = int(request.form.get("selected_face"))
     k = int(request.form.get("number_of_images", 5))
-    similar,temp_err = helper.get_k_similar_images(current_image,selected_face,model, k)
+    similar,temp_err = helper.get_k_similar_images(current_image,selected_face,similarity_thresh,model, k)
     errors = errors + temp_err
-    return jsonify({"images": similar, "errors": errors})
+    json_similar=[s.to_json() for s in similar]
+    return jsonify({"images": json_similar, "errors": errors})
 
 
 @app.route("/api/check", methods=["POST"])
@@ -426,29 +428,33 @@ def find_similar_image():
     most_similar_image = None
     messages = []
     errors = []
-    similarity = -1
+    image_name=""
+    face_num=-2
     face_length = 0
     current_image = request.form.get("image")
     selected_face = int(request.form.get("selected_face"))
     if len(current_image) > 0:
-        (
-            most_similar_image,
-            most_similar_face_num,
-            similarity,
-            temp_err,
-        ) = helper.get_most_similar_image(selected_face, current_image,similarity_thresh,model)
+       
+        similar_images,temp_err=helper.get_k_similar_images(current_image,
+                                                            selected_face,
+                                                            similarity_thresh,
+                                                            model)
         errors = errors + temp_err
+        if len(similar_images)>0:
+            most_similar_image=max(similar_images,key=lambda x: x.similarity)
     else:
         errors.append("no images selected for check")
     if most_similar_image:
         messages.append(
-            f"The most similar face is no. {most_similar_face_num+1} in image {most_similar_image} with similarity of {similarity:.4f}"
+            f"The most similar face is no. {most_similar_image.face_num+1} in image {most_similar_image.image_name} with similarity of {most_similar_image.similarity:.4f}"
         )
-        face_length = helper.emb_manager.get_face_count_by_filename(most_similar_image,model_name)
+        face_length = len(helper.get_face_boxes(most_similar_image.image_name,model_name))
+        image_name=most_similar_image.image_name
+        face_num=most_similar_image.face_num
     return jsonify(
         {
-            "image": most_similar_image,
-            "face": most_similar_face_num,
+            "image": image_name,
+            "face": face_num,
             "face_length": face_length,
             "errors": errors,
             "messages": messages,
@@ -500,9 +506,9 @@ def find_face_in_image():
     else:
         path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(path):
-        face_count, boxes = helper.detect_faces_in_image(filename,model, [])
-        faces_length = face_count
-        messages.append(f"{face_count} detected faces in {filename}.")
+        boxes = helper.get_face_boxes(filename,model.name)
+        faces_length = len(boxes)
+        messages.append(f"{faces_length} detected faces in {filename}.")
     else:
         errors.append(f"File {filename} does not exist!")
     return jsonify(
@@ -577,11 +583,11 @@ helper = ImageHelper(
     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
 )
 for model_name,_ in ModelLoader.models.items():
-    ModelLoader.load_model(model_name)
+    ModelLoader.load_model(model_name,APP_DIR)
     manager.load(model_name)
 
 if __name__ == "__main__":
     try:
-        app.run(debug=True, port=5057)
+        app.run(debug=True, port=5057,use_reloader=False)
     except Exception as e:
         print(f"Error: {e}")

@@ -8,6 +8,8 @@ from insightface.utils.face_align import norm_crop
 from flask import send_from_directory
 import json
 import traceback
+
+#Define directories
 APP_DIR = os.path.dirname(sys.argv[0])
 UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
 STATIC_FOLDER = os.path.join(APP_DIR,"static")
@@ -17,7 +19,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER,"no_face"), exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
-for model in ModelLoader.models:
+#create processing folders for each model
+for model in ModelLoader.detectors:
     os.makedirs(os.path.join(STATIC_FOLDER,model), exist_ok=True)
     
 
@@ -67,12 +70,13 @@ app = Flask(__name__, static_folder="static")
 cors = CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
 app.config["CORS_HEADERS"] = "Content-Type"
 
-
+#serve the source images
 @app.route("/pool/<path:filename>")
 def custom_static(filename):
     return send_from_directory("pool", filename)
 
 
+#serve the images from the static folder
 @app.route("/static_images/<path:filename>")
 def processed_static(filename):
     return send_from_directory("static", filename)
@@ -107,7 +111,7 @@ def check_uploaded_images(filename, image_helper_instance):
 
     return True, "Image uploaded and validated successfully."
 
-
+#batch upload endpoint for a large amount of images
 @app.route("/api/upload", methods=["POST"])
 def upload_image():
     errors = []
@@ -115,9 +119,13 @@ def upload_image():
     files = request.files.items()
     faces_length = []
     valid_images=[]
-    generated=[];
-    return_model_name=request.form.get("model_name","buffalo_l",type=str)
-    save_invalid=request.form.get("save_invalid",False,type=bool);
+    generated_embeddings={};
+    base_model_embs=[];
+    #get request parameters
+    return_detector=request.form.get("detector_name","SCRFD10G",type=str)
+    return_embedder=request.form.get("embedder_name","ResNet100GLint360K",type=str)
+    save_invalid=request.form.get("save_invalid",False,type=bool); #true if images will be saved without containing faces
+    
     invalid_images=[]
     for image_name, file in files:
         if file and file.filename:
@@ -126,28 +134,44 @@ def upload_image():
                 session.pop("uploaded_images", None)
                 path = os.path.join(UPLOAD_FOLDER, file.filename)
                 try:
+                    #save image
                     file.save(path)
-                    for model_name,_ in ModelLoader.models.items():
-                        model=ModelLoader.load_model(model_name=model_name);
-                    # Generate the embeddings for all faces and store them for future indexing
-                        img,faces,temp_err=helper.create_aligned_images(file.filename,model,generated)
-                        img,faces,_,temp_err = helper.generate_all_emb(img,faces,file.filename,model)
-                        errors = errors + temp_err
-
-                        if(model_name==return_model_name):
-                            faces_length.append(len(faces)) if faces else faces_length.append(0);
-                            if len(temp_err) > 0 or (not faces):
-                                if(save_invalid):
-                                    os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
+                    #load model
+                    for detector_name in ModelLoader.detectors:
+                        detector=ModelLoader.load_detector(model_name=detector_name);
+                        for embedder_name in ModelLoader.embedders:
+                            embedder=ModelLoader.load_embedder(model_name=embedder_name);
+                            # Create cropped images for all faces detected and store them in the respective model folder under static/{model}/
+                            img,faces,temp_err=helper.create_aligned_images(file.filename,detector,[])
+                            # Generate the embeddings for all faces and store them for future indexing
+                            img,faces,embeddings,temp_err = helper.generate_all_emb(img,faces,file.filename,detector,embedder);
+                            generated_embeddings[f"{detector_name}_{embedder_name}"]=embeddings
+                            errors = errors + temp_err
+                            #if its the model name that was submitted in the request
+                            if(detector_name==return_detector and embedder_name==return_embedder):
+                                base_model_embs=embeddings
+                                #get all the results for the selected model
+                                faces_length.append(len(faces)) if faces else faces_length.append(0);
+                                if len(temp_err) > 0 or (not faces):
+                                    #if images with no detected faces are allowed save them under the no face directory
+                                    if(save_invalid):
+                                        os.replace(path,os.path.join(UPLOAD_FOLDER,"no_face",file.filename))
+                                    else:
+                                        os.remove(path);
+                                    invalid_images.append("no_face/"+file.filename);
+                                    current_images.append(None)
                                 else:
-                                    os.remove(path);
-                                invalid_images.append("no_face/"+file.filename);
-                                current_images.append(None)
-                            else:
-                                current_images.append(file.filename)
-                                valid_images.append(file.filename)
+                                    current_images.append(file.filename)
+                                    valid_images.append(file.filename)
+                            #save the current database state 
+                        manager.save(detector_name)
 
-                        manager.save(model_name)
+                    other_detectors = [m for m in ModelLoader.detectors if m is not return_detector]
+                    other_embedders = [m for m in ModelLoader.embedders if m is not return_detector]
+                    for detector in other_detectors:
+                        for embedder in other_embedders:
+                            faces_length_other=len(generated_embeddings[f"{detector}_{embedder}"])
+                        
                 except Exception as e:
                     tb = traceback.format_exc()
                     errors.append(f"Failed to save {filename} due to error: {str(e)}")
@@ -160,14 +184,18 @@ def upload_image():
 
 @app.route("/api/delete", methods=["GET"])
 def delete_embeddings():
+    #delete all the saved databases states
     manager.delete_all()
     return jsonify({"result": "success"})
 
+#create cropped images of detected faces for all uploaded images for a specific model
 @app.route("/api/align", methods=["POST"])
 def align_image():
     uploaded_images = request.form.getlist("images")
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
+    embedder=ModelLoader.load_embedder(embedder_name)
+    detector=ModelLoader.load_detector(detector_name)
     faces_length = []
     messages = []
     errors = []
@@ -193,13 +221,14 @@ def align_image():
         }
     )
 
-
+#creates detected images for faces for all uploaded images for a specific model
+#the detected images contain kps (5 points)
 @app.route("/api/detect", methods=["POST"])
 def detect_image():
     #current_detected_images = []
     uploaded_images = request.form.getlist("images")
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    detector=ModelLoader.load_detector(detector_name)
     faces_length = []
     messages = []
     errors = []
@@ -207,12 +236,12 @@ def detect_image():
     for i in range(len(uploaded_images)):
         filename = uploaded_images[i]
         if "aligned" in filename or "detected" in filename:
-            path = os.path.join(STATIC_FOLDER,model_name, filename)
+            path = os.path.join(STATIC_FOLDER,detector_name, filename)
         else:
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
             
-            face_count, _ = helper.detect_faces_in_image(filename,model, images)
+            face_count, _ = helper.detect_faces_in_image(filename,detector, images)
             
             if face_count is not None:
                 faces_length.append(face_count)
@@ -233,12 +262,16 @@ def detect_image():
     )
 
 
+#compare two images and their selected faces based on their similarity
+#if above provided threshold return positive result 
 @app.route("/api/compare", methods=["POST"])
 def compare_image():
     uploaded_images = request.form.getlist("images")
     similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
+    embedder=ModelLoader.load_embedder(embedder_name)
+    detector=ModelLoader.load_detector(detector_name)
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
     embeddings = []
     messages = []
@@ -247,12 +280,13 @@ def compare_image():
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(filename,model_name).embedding
+            #check if embedding of face already exists 
+            embedding = manager.get_embedding_by_name(filename,detector_name,embedder_name).embedding
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
                 embedding, temp_err = helper.generate_embedding(
-                    uploaded_images[i], combochanges[i],model
+                    uploaded_images[i], combochanges[i],detector,embedder
                 )
                 # Add the errors and embeddings from the helper function to the local variables
                 errors = errors + temp_err
@@ -289,8 +323,10 @@ def compare_image():
 def improve_image():
    
     image = request.form.get("image")
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
+    detector=ModelLoader.load_detector(detector_name)
+    embedder=ModelLoader.load_embedder(embedder_name)
 
     enhanced_image=image
     errors = []
@@ -305,8 +341,8 @@ def improve_image():
                 cv2.imwrite(enhanced_image_path, enhanced_img)
                 enhanced_image="enhanced_"+image
 
-                img,faces,temp_err=helper.create_aligned_images("enhanced_"+image,model,[])
-                _,_,_,temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image,model)
+                img,faces,temp_err=helper.create_aligned_images("enhanced_"+image,detector,[])
+                _,_,_,temp_err = helper.generate_all_emb(img,faces,"enhanced_"+image,detector,embedder)
                 errors = errors + temp_err
 
                 if len(temp_err) > 0:
@@ -326,9 +362,11 @@ def improve_image():
 
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
-    model_name=request.form.get("model_name","buffalo_l",type=str)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
     similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
-    model=ModelLoader.load_model(model_name)
+    embedder=ModelLoader.load_embedder(embedder_name)
+    detector=ModelLoader.load_detector(detector_name)
 
     uploaded_images = request.form.getlist("images")
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
@@ -339,12 +377,12 @@ def checkisfamily():
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
             aligned_filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
-            embedding = manager.get_embedding_by_name(aligned_filename,model_name).embedding
+            embedding = manager.get_embedding_by_name(aligned_filename,detector_name,embedder_name).embedding
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
                 embedding, temp_err = helper.generate_embedding(
-                    uploaded_images[i], 0,model
+                    uploaded_images[i], 0,detector,embedder
                 )
                 # Add the errors and embeddings from the helper function to the local variables
                 errors = errors + temp_err
@@ -374,7 +412,7 @@ def checkisfamily():
         
 
         for i in range(2):
-            img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],model);
+            img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],detector);
             if faces:
                 Genders[i]=faces[0].gender;
        
@@ -407,13 +445,15 @@ def checkisfamily():
 def find_similar_images():
     errors = []
     messages = []
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
+    embedder=ModelLoader.load_embedder(embedder_name)
+    detector=ModelLoader.load_detector(detector_name)
     similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
     current_image = request.form.get("image")
     selected_face = int(request.form.get("selected_face"))
     k = int(request.form.get("number_of_images", 5))
-    similar,temp_err = helper.get_k_similar_images(current_image,selected_face,similarity_thresh,model, k)
+    similar,temp_err = helper.get_k_similar_images(current_image,selected_face,similarity_thresh,detector,embedder, k)
     errors = errors + temp_err
     json_similar=[s.to_json() for s in similar]
     return jsonify({"images": json_similar, "errors": errors})
@@ -421,9 +461,11 @@ def find_similar_images():
 
 @app.route("/api/check", methods=["POST"])
 def find_similar_image():
-    model_name=request.form.get("model_name","buffalo_l",type=str)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
     similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
-    model=ModelLoader.load_model(model_name)
+    embedder=ModelLoader.load_embedder(embedder_name)
+    detector=ModelLoader.load_detector(detector_name)
 
     most_similar_image = None
     messages = []
@@ -438,7 +480,7 @@ def find_similar_image():
         similar_images,temp_err=helper.get_k_similar_images(current_image,
                                                             selected_face,
                                                             similarity_thresh,
-                                                            model)
+                                                            detector=detector,embedder=embedder,k=5)
         errors = errors + temp_err
         if len(similar_images)>0:
             most_similar_image=max(similar_images,key=lambda x: x.similarity)
@@ -448,7 +490,7 @@ def find_similar_image():
         messages.append(
             f"The most similar face is no. {most_similar_image.face_num+1} in image {most_similar_image.image_name} with similarity of {most_similar_image.similarity:.4f}"
         )
-        face_length = len(helper.get_face_boxes(most_similar_image.image_name,model_name))
+        face_length = len(helper.get_face_boxes(most_similar_image.image_name,detector_name,embedder_name))
         image_name=most_similar_image.image_name
         face_num=most_similar_image.face_num
     return jsonify(
@@ -495,8 +537,9 @@ def find_by_template():
 @app.route("/api/find", methods=["POST"])
 def find_face_in_image():
     filename = request.form.get("image")
-    model_name=request.form.get("model_name","buffalo_l",type=str)
-    model=ModelLoader.load_model(model_name)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
+    
     faces_length = [0]
     messages = []
     errors = []
@@ -506,7 +549,7 @@ def find_face_in_image():
     else:
         path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(path):
-        boxes = helper.get_face_boxes(filename,model.name)
+        boxes = helper.get_face_boxes(filename,detector_name=detector_name,embedder_name=embedder_name)
         faces_length = len(boxes)
         messages.append(f"{faces_length} detected faces in {filename}.")
     else:
@@ -523,7 +566,8 @@ def find_face_in_image():
 
 @app.route("/api/filter",methods=["POST"])
 def filter():
-    model_name=request.form.get("model_name","buffalo_l",type=str)
+    detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
+    embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
     threshold = float(request.form.get("threshold", 999))
     if threshold<1:
         deleted=helper.filter(threshold,model_name=model_name)
@@ -543,14 +587,15 @@ def get_groups():
     eps=float(data["max_distance"]) if "max_distance" in data else 0.5; 
     min_samples=int(data["min_samples"]) if "min_samples" in data else 4; 
     retrain=data["retrain"] if "retrain" in data else False; 
-    model_name=data["model_name"] if "model_name" in data else "buffalo_l"
-    value_groups=helper.cluster_images(eps,min_samples,model_name);
+    detector_name=data["detector_name"] if "detector_name" in data else "SCRFD10G"
+    embedder_name=data["embedder_name"] if "embedder_name" in data else "ResNet100GLint360K"
+    value_groups=helper.cluster_images(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
     if(retrain):
-        groups.train_index(value_groups,model_name);
-        groups.save_index(model_name);
+        groups.train_index(value_groups,detector_name,embedder_name);
+        groups.save_index(detector_name);
         return jsonify(value_groups);
-    modified_group={};
-    index=groups.groups[model_name].index;
+    modified_group:dict[str,list]={};
+    index=groups.groups[detector_name].groups[embedder_name].index;
     for cluster_id,images in value_groups.items():
         for image in images:
             group_name=cluster_id;
@@ -568,9 +613,11 @@ def change_group_name():
     data=json.loads(request.get_data());
     old= data['old'];
     new= data['new'];
-    model_name=data["model_name"] if "model_name" in data else "buffalo_l"
+    detector_name=data["detector_name"] if "detector_name" in data else "SCRFD10G"
+    embedder_name=data["embedder_name"] if "embedder_name" in data else "ResNet100GLint360K"
     if(old and new and old.strip() and new.strip()):
-        groups.change_group_name(old,new,model_name);
+        groups.change_group_name(old,new,detector_name,embedder_name);
+        groups.save_index(detector_name)
     return jsonify(success=True);
 
 app.secret_key = "your_secret_key"
@@ -582,9 +629,12 @@ groups = ImageGroupRepository(APP_DIR)
 helper = ImageHelper(
     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER
 )
-for model_name,_ in ModelLoader.models.items():
-    ModelLoader.load_model(model_name,APP_DIR)
+for model_name,_ in ModelLoader.detectors.items():
+    ModelLoader.load_detector(model_name,APP_DIR)
     manager.load(model_name)
+
+for model_name,_ in ModelLoader.embedders.items():
+    ModelLoader.load_embedder(model_name,APP_DIR);
 
 if __name__ == "__main__":
     try:

@@ -40,6 +40,9 @@ class Buffalo_L(BaseModel):
         try:
             close_faces=self.detector_zoomed.get(img)
             far_faces=self.detector.get(img)
+
+
+            
             faces=far_faces.copy();
             for j in range(len(close_faces)):
                         duplicate=False;

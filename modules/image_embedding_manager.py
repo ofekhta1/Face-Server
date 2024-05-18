@@ -20,6 +20,11 @@ class ImageEmbeddingManager:
     def get_image_boxes(self,filename:str,detector_name:str,embedder_name:str):
         boxes=[e.box for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return boxes;
+
+    def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
+        embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
+        return embeddings;
+
     def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str):
         self.db_embeddings[detector_name].add_embedding(embedder_name,embedding,name,box);
     

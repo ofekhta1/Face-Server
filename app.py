@@ -4,7 +4,7 @@ import cv2
 import sys
 from modules import ImageEmbeddingManager,ImageHelper,ImageGroupRepository,FamilyClassifier,ModelLoader,util
 from flask_cors import CORS
-from insightface.utils.face_align import norm_crop
+import numpy as np
 from flask import send_from_directory
 import json
 import traceback
@@ -118,22 +118,25 @@ def upload_image():
     current_images = []
     files = request.files.items()
     faces_length = []
+    detector_indices:list[dict[str,list[int]]]=[];
     valid_images=[]
-    generated_embeddings={};
-    base_model_embs=[];
+    generated_embeddings:list[dict[str,list[np.ndarray]]]={};
     #get request parameters
     return_detector=request.form.get("detector_name","SCRFD10G",type=str)
     return_embedder=request.form.get("embedder_name","ResNet100GLint360K",type=str)
     save_invalid=request.form.get("save_invalid",False,type=bool); #true if images will be saved without containing faces
-    
+    i=-1
     invalid_images=[]
     for image_name, file in files:
+        detector_indices
         if file and file.filename:
             filename = file.filename.replace("_", "")
             if ImageHelper.allowed_file(file.filename):
                 session.pop("uploaded_images", None)
                 path = os.path.join(UPLOAD_FOLDER, file.filename)
                 try:
+                    i+=1
+                    detector_indices.append({});
                     #save image
                     file.save(path)
                     #load model
@@ -145,11 +148,11 @@ def upload_image():
                             img,faces,temp_err=helper.create_aligned_images(file.filename,detector,[])
                             # Generate the embeddings for all faces and store them for future indexing
                             img,faces,embeddings,temp_err = helper.generate_all_emb(img,faces,file.filename,detector,embedder);
-                            generated_embeddings[f"{detector_name}_{embedder_name}"]=embeddings
+                            detector_indices[i][return_detector]=list(range(len(embeddings)));
+                            generated_embeddings[f"{detector_name}_{embedder_name}"]=np.array(embeddings)
                             errors = errors + temp_err
                             #if its the model name that was submitted in the request
                             if(detector_name==return_detector and embedder_name==return_embedder):
-                                base_model_embs=embeddings
                                 #get all the results for the selected model
                                 faces_length.append(len(faces)) if faces else faces_length.append(0);
                                 if len(temp_err) > 0 or (not faces):
@@ -166,20 +169,16 @@ def upload_image():
                             #save the current database state 
                         manager.save(detector_name)
 
-                    other_detectors = [m for m in ModelLoader.detectors if m is not return_detector]
-                    other_embedders = [m for m in ModelLoader.embedders if m is not return_detector]
-                    for detector in other_detectors:
-                        for embedder in other_embedders:
-                            faces_length_other=len(generated_embeddings[f"{detector}_{embedder}"])
-                        
+                    detector_indices[i]=util.get_all_detectors_faces(generated_embeddings,return_detector);
                 except Exception as e:
                     tb = traceback.format_exc()
                     errors.append(f"Failed to save {filename} due to error: {str(e)}")
 
             else:
                 errors.append(f"Invalid file format for {file.filename}. ")
+            
 
-    return jsonify({"images": valid_images,"invalid_images":invalid_images, "faces_length": faces_length, "errors": errors})
+    return jsonify({"images": valid_images,"invalid_images":invalid_images,"detector_indices":detector_indices, "faces_length": faces_length, "errors": errors})
 
 
 @app.route("/api/delete", methods=["GET"])
@@ -487,21 +486,35 @@ def find_similar_image():
     else:
         errors.append("no images selected for check")
     if most_similar_image:
+
+
         messages.append(
             f"The most similar face is no. {most_similar_image.face_num+1} in image {most_similar_image.image_name} with similarity of {most_similar_image.similarity:.4f}"
         )
         face_length = len(helper.get_face_boxes(most_similar_image.image_name,detector_name,embedder_name))
         image_name=most_similar_image.image_name
         face_num=most_similar_image.face_num
-    return jsonify(
+        generated_embeddings={}
+        for detector in ModelLoader.detectors:
+            for embedder in ModelLoader.embedders:
+                generated_embeddings[f"{detector}_{embedder}"]=helper.emb_manager.get_image_embeddings(image_name,detector,embedder)
+        detector_indices=util.get_all_detectors_faces(generated_embeddings,detector_name);
+        return jsonify(
         {
             "image": image_name,
             "face": face_num,
             "face_length": face_length,
+            "detector_indices":detector_indices,
             "errors": errors,
             "messages": messages,
         }
     )
+    return jsonify({"image":"",
+                   "face":-2,
+                   "face_length":0,
+                   "detector_indices":[],
+                   "errors":errors,
+                   "messages":messages})
 
 @app.route("/api/check_template", methods=["POST"])
 def find_by_template():

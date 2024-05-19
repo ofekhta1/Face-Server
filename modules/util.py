@@ -1,5 +1,39 @@
 import numpy as np
 import os
+from sklearn.metrics.pairwise import cosine_similarity
+def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_detector:str):
+    detector_indices:dict[str,list[int]]={}
+    for models in generated_embeddings:
+        detector,embedder=models.split('_')
+        if(detector!=return_detector):
+            base_detector_embs = generated_embeddings[f"{return_detector}_{embedder}"]
+            other_embeddings = generated_embeddings[f"{detector}_{embedder}"]
+            # Swap the first and second rows
+            similarity_matrix = cosine_similarity(base_detector_embs, other_embeddings)
+            print("Similarity Matrix:")
+            print(similarity_matrix)
+            detector_indices[detector]=convert_detector_indices(similarity_matrix);
+    
+    detector_indices[return_detector]=list(range(len(base_detector_embs)));
+
+    return detector_indices;
+def convert_detector_indices(similarity_matrix,tolerance=0.1):
+    column_indexes = []
+    for col_index, column in enumerate(similarity_matrix.T):  # Transpose the array to iterate over columns
+        for i in range(len(column)):
+            value=column[i]
+            if abs(value - 1) < tolerance:
+                column_indexes.append(i)
+                break;
+            if(i==len(column)-1):
+                column_indexes.append(-1)
+    replacement_value=max(column_indexes)+1
+    for i in range(len(column_indexes)):
+        if column_indexes[i]==-1:
+            column_indexes[i]=replacement_value
+            replacement_value+=1
+    return column_indexes
+
 def euclidean_distance(point1, point2):
     return np.linalg.norm(np.array(point1) - np.array(point2))
 

@@ -3,7 +3,7 @@ import os;
 import pandas as pd;
 import numpy as np;
 class FamilyClassifier:
-
+    # load the weights of the family_classifier_nodel
     def __init__(self,root_path):
         models_path=os.path.join(root_path,"OnnxModels");
         with open(os.path.join(models_path,"family_classifier_model.pkl"), "rb") as model_file:
@@ -21,8 +21,8 @@ class FamilyClassifier:
         }
         features =self.__create_features(pd.DataFrame([new_data]))
         features_scaled = self.scaler.transform(features)
-        prediction = self.model.predict_proba(features_scaled)[0][1]
-        return prediction
+        prediction = self.model.predict(features_scaled)
+        return prediction[0],similarity
         
     def __create_features(self,df):
         features = []
@@ -38,7 +38,6 @@ class FamilyClassifier:
             features.append(feature)
 
         return np.array(features)
-
+    #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
     def __gender_to_numeric(self,gender):
-    # Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
         return 1 if gender == 'W' else 0

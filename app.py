@@ -12,7 +12,7 @@ APP_DIR = os.path.dirname(sys.argv[0])
 UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
 STATIC_FOLDER = os.path.join(APP_DIR,"static")
 
-# Create the folders if they don't exist
+# create dirs
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_FOLDER,"no_face"), exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
@@ -116,6 +116,7 @@ def upload_image():
     faces_length = []
     valid_images=[]
     generated=[];
+    #call the buffalo model as a def
     return_model_name=request.form.get("model_name","buffalo_l",type=str)
     save_invalid=request.form.get("save_invalid",False,type=bool);
     invalid_images=[]
@@ -133,7 +134,7 @@ def upload_image():
                         img,faces,temp_err=helper.create_aligned_images(file.filename,model,generated)
                         img,faces,_,temp_err = helper.generate_all_emb(img,faces,file.filename,model)
                         errors = errors + temp_err
-
+                    #check the image contains a face 
                         if(model_name==return_model_name):
                             faces_length.append(len(faces)) if faces else faces_length.append(0);
                             if len(temp_err) > 0 or (not faces):
@@ -172,6 +173,7 @@ def align_image():
     messages = []
     errors = []
     images = []
+    # align the images if they aren't already aligned
     for i in range(len(uploaded_images)):
         filename = uploaded_images[i]
         if "aligned" in filename or "detected" in filename:
@@ -211,7 +213,7 @@ def detect_image():
         else:
             path = os.path.join(UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            
+            # ensure that the user check img with faces for the detection
             face_count, _ = helper.detect_faces_in_image(filename,model, images)
             
             if face_count is not None:
@@ -243,7 +245,7 @@ def compare_image():
     embeddings = []
     messages = []
     errors = []
-
+    # ensure that the user check 2 image faces 
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
@@ -264,7 +266,7 @@ def compare_image():
             errors.append("Select exactly 2 images for comparison.")
 
     if len(embeddings) == 2:
-        # Calculate similarity between the two images
+        # Calculate the  similarity between the two selected faces images and return the result based in the configured threshold
         similarity = util.calculate_similarity(embeddings[0], embeddings[1])
         messages.append(f"Similarity: {similarity:.4f}")
         if similarity >= similarity_thresh:
@@ -297,6 +299,7 @@ def improve_image():
     messages=[]
     i=0
     print(request.form)
+    #check if the image is already enhanced
     if "enhanced" not in image:
         try:
             enhanced_img = helper.enhance_image(image)
@@ -327,14 +330,15 @@ def improve_image():
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
     model_name=request.form.get("model_name","buffalo_l",type=str)
-    similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
+    #similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
     model=ModelLoader.load_model(model_name)
-
     uploaded_images = request.form.getlist("images")
+    # helper.cluster_family_images(model_name,APP_DIR,uploaded_images,model)
     combochanges = [int(x) for x in request.form.getlist("selected_faces")]
     embeddings = []
     messages = []
     errors = []
+    #check if the user upload 2 face images
     if len(uploaded_images) == 2:
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
@@ -372,7 +376,7 @@ def checkisfamily():
         # embedding2 = np.array(embedding_list_2)
         # for i in range (2):
         
-
+        #get the min of each face 
         for i in range(2):
             img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],model);
             if faces:
@@ -387,12 +391,14 @@ def checkisfamily():
         # landmarks1= "[16. 19. 48. 18. 33. 33. 19. 42. 46. 41.]"
 
         # landmarks2="[18. 21. 47. 21. 32. 39. 20. 44. 47. 44.]"
-        probability=classifier.predict(similarity,Genders[0],Genders[1]);
-        is_same_family= probability>similarity_thresh
+
+        is_same_family,similar=classifier.predict(similarity,Genders[0],Genders[1]);
+        # probability=classifier.predict(similarity,Genders[0],Genders[1]);
+        # is_same_family= probability>similarity_thresh
         messages.append(
-            f"Probably the Same Family with probability {probability:.2f}"
+            f"Probably the Same Family with probability {similar:.2f}"
             if is_same_family
-            else f"Probably Not the Same Family with probability {probability:.2f}"
+            else f"Probably Not the Same Family with probability {similar:.2f}"
         )
 
     return jsonify(
@@ -469,13 +475,14 @@ def find_by_template():
     box=[]
     similarity = -1
     current_image = request.form.get("template")
+    similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
     if len(current_image) > 0:
         (
             most_similar_image,
             box,
             similarity,
             temp_err,
-            ) = helper.get_most_similar_image_by_template(current_image)
+            ) = helper.get_most_similar_image_by_template(current_image,similarity_thresh)
         errors = errors + temp_err
     else:
         errors.append("no images selected for check")
@@ -544,7 +551,16 @@ def get_groups():
     min_samples=int(data["min_samples"]) if "min_samples" in data else 4; 
     retrain=data["retrain"] if "retrain" in data else False; 
     model_name=data["model_name"] if "model_name" in data else "buffalo_l"
+    cluster_family = data.get("cluster_family", None)
+    if cluster_family is None:
+        return jsonify({'error': 'Missing cluster_family'}), 400
+    #for now- if it's the same family its change the threshold to 0.13
+    elif (cluster_family=='yes'):
+      eps=0.87  
     value_groups=helper.cluster_images(eps,min_samples,model_name);
+    
+    # similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
+   
     if(retrain):
         groups.train_index(value_groups,model_name);
         groups.save_index(model_name);

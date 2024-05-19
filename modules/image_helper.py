@@ -1,14 +1,19 @@
 import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
+# 
 from models.similar_image import SimilarImage
+from modules.family_classifier import FamilyClassifier
 from . import util,image_embedding_manager,image_group_repository;
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN,AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 from  .model_loader import ModelLoader
 from modules.models.base_model import BaseModel
 import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN, AgglomerativeClustering
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 
 class ImageHelper:
@@ -169,7 +174,7 @@ class ImageHelper:
         # self.emb_manager.set_face_count(filename,len(filtered_faces),model_name=model.name)
         return img,filtered_faces,filtered_embeddings,errors;
 
-
+     # function that calculates the sift points between 2 images.
     @staticmethod
     def points(numpoints,max_val,template_path,image_path):
       MIN_MATCH_COUNT = numpoints
@@ -312,7 +317,7 @@ class ImageHelper:
                     manager.remove_embedding_by_index(image['index'],model_name);
         filtered_length=len(embeddings);
         return original_length-filtered_length;
-
+    #function that improve  the blurred,sharpened,clahe of the selected img
     def enhance_image(self,filename):
         image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         # Load the image
@@ -371,7 +376,8 @@ class ImageHelper:
         errors=errors+temp_err;
         return similar_images,errors;
 
-    def get_most_similar_image_by_template(self,filename):
+    #function that returns the most similiar image to the selected template, accorfing to the selected thr and sift points
+    def get_most_similar_image_by_template(self,filename,similarity_thresh):
         user_image_path = os.path.join(self.UPLOAD_FOLDER, filename)
         errors=[]
         most_similar_image=None;
@@ -380,6 +386,8 @@ class ImageHelper:
         over20 = []
         max_len=0
         best_match_score = -1
+        best_match_score2= -1
+        best_score_sofi= -1
         best_match_image_1 = None
         best_match_image_2=None 
 
@@ -394,7 +402,7 @@ class ImageHelper:
                              resized_template = cv2.resize(template, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
                              result = cv2.matchTemplate(img2, resized_template, cv2.TM_CCOEFF_NORMED)
                              min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                             if max_val > 0.3:
+                             if max_val > similarity_thresh:
                                 over20.append((max_val, entry.path))
  
                              if max_val > best_match_score and max_val <= 1:
@@ -420,27 +428,35 @@ class ImageHelper:
                         #      max_similarity =max_val
                         #      #leng=  ImageHelper.points(4,max_similarity,full_path,entry.path)
             #cv2.destroyAllWindows();
+       #run over all the files with the appropiate similarity( accorfing to the configured threshold)
         for file in over20:
          leng=  ImageHelper.points(4,file[0],user_image_path,file[1])
          if(max_len<leng):
            max_len=leng
            best_match_image_2=file[1]
+           best_match_score2=file[0]
            filenamesift = os.path.basename(best_match_image_2)
+        #rerturn the file with the most sift points and compare it to a val
         if(best_match_image_1!=best_match_image_2):
          if(max_len>30):
+           best_score_sofi=best_match_score2
            most_similar_image=filenamesift
          else:
+          best_score_sofi=best_match_score
           most_similar_image=best_match_image_1
-        return most_similar_image,box,best_match_score,errors;
-    
+        #returh the most similiar img 
+        return most_similar_image,box,best_score_sofi,errors;
+
+
     def cluster_images(self,max_distance,min_samples,model_name)->dict[int,list[str]]:
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings
         embeddings=[e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
         if(len(embeddings)==0):
             return {}
+        #create a similarity matrix that includes the cosine similarity between every 2 images in the embedding data
         similarity_matrix = cosine_similarity(embeddings)
         similarity_matrix = np.clip(similarity_matrix, -1, 1)
-        # Apply DBSCAN
+        # Apply DBSCAN-model that takes the min sample and max distance as returns the groups according to the required distances and min images in group parameters
 
         dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric="precomputed")
         labels = dbscan.fit_predict(1 - similarity_matrix)  # Convert similarity to distance
@@ -452,3 +468,68 @@ class ImageHelper:
             for key, indexes in index_groups.items()
         }
         return value_groups;
+    # def cluster_images_without_family(self, max_distance, min_samples, model_name, family_distance_threshold) -> dict[int, dict[int, list[str]]]:
+    
+    #  embeddings = [e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
+    #  if len(embeddings) == 0:
+    #     return {}
+    
+    #  similarity_matrix = cosine_similarity(embeddings)
+    #  similarity_matrix = np.clip(similarity_matrix, -1, 1)
+    #  dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric="precomputed")
+    #  labels = dbscan.fit_predict(1 - similarity_matrix)
+    #  unique_values = np.unique(labels)
+    #  index_groups = {value: np.where(labels == value)[0] for value in unique_values}
+    #  clusters = {}
+    #  centroids = []
+    #  for key, indexes in index_groups.items():
+    #      cluster_embeddings = np.array([embeddings[index] for index in indexes])
+    #      centroid = np.mean(cluster_embeddings, axis=0)
+    #      centroids.append(centroid)
+    #      clusters[int(key)] = [self.emb_manager.db_embeddings[model_name].embeddings[index].name for index in indexes]
+    #  if len(clusters) <= family_distance_threshold:
+    #      return {0: clusters}
+    #  centroid_similarity_matrix = cosine_similarity(centroids)
+    #  centroid_distance_matrix = 1 - np.clip(centroid_similarity_matrix, -1, 1)
+    #  agglomerative = AgglomerativeClustering(n_clusters=None, distance_threshold=family_distance_threshold, affinity="precomputed", linkage="average")
+    #  family_labels = agglomerative.fit_predict(centroid_distance_matrix)
+    #  family_clusters = {}
+    #  for cluster_id, family_id in enumerate(family_labels):
+    #     if family_id not in family_clusters:
+    #         family_clusters[family_id] = {}
+    #     if cluster_id in clusters:
+    #         family_clusters[family_id][cluster_id] = clusters[cluster_id]
+    #     else:
+    #         print(f"Warning: cluster_id {cluster_id} not found in clusters")
+     
+    #  family_clusters = {k: v for k, v in family_clusters.items() if v}
+    #  return family_clusters
+    
+    # def cluster_family_images(self,model_name,APP_DIR,uploaded_images,model):
+    #     cluster_family_arr = []
+    #     # Assuming 'embeddings' is a list of your 512-dimensional embeddings
+    #     embeddings=[e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
+    #     if(len(embeddings)==0):
+    #         return {}
+    #     for i in range(len(embeddings)):
+    #      for j in range(i + 1, len(embeddings)):
+    #       similarity = util.calculate_similarity(embeddings[i], embeddings[j])
+    #       classifier= FamilyClassifier(APP_DIR);
+    #       Genders=[0,0]
+    #       for i in range(2):
+    #           img,faces=self.__extract_faces(uploaded_images[i],model);
+    #           if faces:
+    #               Genders[i]=faces[0].gender;
+    #       is_same_family,similar=classifier.predict(similarity,Genders[0],Genders[1]);
+    #       if is_same_family:
+    #           val = [[embeddings[i], embeddings[j], 1]]
+    #           cluster_family_arr.append(val)
+    #     print(cluster_family_arr)
+
+        # from app import APP_DIR
+       # for i in range(len(embeddings) - 1):
+    
+            
+
+
+       

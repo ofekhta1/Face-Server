@@ -6,6 +6,7 @@ def euclidean_distance(point1, point2):
 def are_bboxes_similar(bbox1, bbox2, threshold):
     return all(euclidean_distance(p1, p2) <= threshold for p1, p2 in zip(bbox1, bbox2))
 
+#calculate the similarity between two images 
 def calculate_similarity(emb_a, emb_b):
     
     similarity = np.dot(emb_a,emb_b) / (

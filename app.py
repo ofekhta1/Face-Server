@@ -551,15 +551,12 @@ def get_groups():
     min_samples=int(data["min_samples"]) if "min_samples" in data else 4; 
     retrain=data["retrain"] if "retrain" in data else False; 
     model_name=data["model_name"] if "model_name" in data else "buffalo_l"
-    cluster_family = data.get("cluster_family", None)
-    if cluster_family is None:
-        return jsonify({'error': 'Missing cluster_family'}), 400
+    cluster_family = data.get("cluster_family", False)
     #for now- if it's the same family its change the threshold to 0.13
-    elif (cluster_family=='yes'):
+    if (cluster_family):
       eps=0.87  
     value_groups=helper.cluster_images(eps,min_samples,model_name);
     
-    # similarity_thresh=request.form.get("similarity_thresh",0.5,type=float)
    
     if(retrain):
         groups.train_index(value_groups,model_name);

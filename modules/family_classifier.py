@@ -27,8 +27,8 @@ class FamilyClassifier:
     def __create_features(self,df):
         features = []
         for _, row in df.iterrows():
-            gender_pic1_numeric =self.__gender_to_numeric(row['Gender1'])
-            gender_pic2_numeric =self.__gender_to_numeric(row['Gender2'])
+            gender_pic1_numeric =self.__map_gender(row['Gender1'])
+            gender_pic2_numeric =self.__map_gender(row['Gender2'])
             similarity_score = row['similatrity']  # Make sure this column name is correct
             # landmarks1 = row['landmarks1'].flatten()  # Flatten the landmarks array
             # landmarks2 = row['landmarks2'].flatten()  # Flatten the landmarks array
@@ -38,6 +38,11 @@ class FamilyClassifier:
             features.append(feature)
 
         return np.array(features)
-    #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
-    def __gender_to_numeric(self,gender):
-        return 1 if gender == 'W' else 0
+    #  invert male and female
+    def __map_gender(self,gender):
+        if(gender==1):
+            return 0
+        elif(gender==0):
+            return 1
+        else:
+            return -1

@@ -73,3 +73,4 @@ urllib3==2.2.1
 userpath==1.9.2
 wcwidth==0.2.13
 Werkzeug==3.0.2
+pymilvus=2.4.3

@@ -2,13 +2,13 @@ from flask import Flask, request, session, jsonify
 import os
 import cv2
 import sys
-from modules import ImageEmbeddingManager,ImageHelper,ImageGroupRepository,FamilyClassifier,ModelLoader,util
+from modules import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager,ImageHelper,ImageGroupRepository,FamilyClassifier,ModelLoader,util
 from flask_cors import CORS
 import numpy as np
 from flask import send_from_directory
 import json
 import traceback
-
+import time
 #Define directories
 APP_DIR = os.path.dirname(sys.argv[0])
 UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
@@ -366,6 +366,7 @@ def checkisfamily():
     detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
     embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
     #similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
+    gender_age=ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
     embedder=ModelLoader.load_embedder(embedder_name)
     detector=ModelLoader.load_detector(detector_name)
     uploaded_images = request.form.getlist("images")
@@ -416,7 +417,7 @@ def checkisfamily():
         for i in range(2):
             img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],detector);
             if faces:
-                Genders[i]=faces[0].gender;
+                Genders[i]= gender_age.get_gender(img,faces[0]);
        
         #  if(i==0):
         #   landmarks1.append(extract_landmark_features(faces[0]))
@@ -427,14 +428,11 @@ def checkisfamily():
         # landmarks1= "[16. 19. 48. 18. 33. 33. 19. 42. 46. 41.]"
 
         # landmarks2="[18. 21. 47. 21. 32. 39. 20. 44. 47. 44.]"
-
         is_same_family,similar=classifier.predict(similarity,Genders[0],Genders[1]);
-        # probability=classifier.predict(similarity,Genders[0],Genders[1]);
-        # is_same_family= probability>similarity_thresh
         messages.append(
-            f"Probably the Same Family with probability {similar:.2f}"
+            f"Probably the Same Family with similarity {similar:.2f}"
             if is_same_family
-            else f"Probably Not the Same Family with probability {similar:.2f}"
+            else f"Probably Not the Same Family with similarity {similar:.2f}"
         )
 
     return jsonify(
@@ -480,11 +478,13 @@ def find_similar_image():
     current_image = request.form.get("image")
     selected_face = int(request.form.get("selected_face"))
     if len(current_image) > 0:
-       
+        start = time.time()
         similar_images,temp_err=helper.get_k_similar_images(current_image,
                                                             selected_face,
                                                             similarity_thresh,
                                                             detector=detector,embedder=embedder,k=5)
+        end = time.time()
+        print(f"Elapsed: {(end-start)*10**3}ms")
         errors = errors + temp_err
         if len(similar_images)>0:
             most_similar_image=max(similar_images,key=lambda x: x.similarity)
@@ -649,7 +649,8 @@ app.secret_key = "your_secret_key"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
-manager = ImageEmbeddingManager(APP_DIR)
+# manager = InMemoryImageEmbeddingManager(APP_DIR)
+manager = MilvusImageEmbeddingManager("http://localhost:19530")
 groups = ImageGroupRepository(APP_DIR)
 helper = ImageHelper(
     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER

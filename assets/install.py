@@ -42,12 +42,17 @@ def download_models():
         "retinanet": "1j4Dm8TguSTk7iCiwCxxeZNZf8Ey0UYF6",
         "scrfd": "1Gp9nI1M9jjYP9evRikkSV9RINQ4eVF30",
     }
+    gender_age_file_ids = {
+        "mobilenet_genderage": "",
+    }
     for model in embedder_file_ids:
         download_model(model,embedder_file_ids[model],os.path.join("Face_Server", "OnnxModels", "Embedders"))
 
     for model in detector_file_ids:
         download_model(model,detector_file_ids[model],os.path.join("Face_Server", "OnnxModels", "Detectors"))
 
+    for model in gender_age_file_ids:
+        download_model(model,gender_age_file_ids[model],os.path.join("Face_Server", "OnnxModels", "GenderAge"))
 
 
 def main():

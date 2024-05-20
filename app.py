@@ -366,6 +366,7 @@ def checkisfamily():
     detector_name=request.form.get("detector_name",default="SCRFD10G",type=str);
     embedder_name=request.form.get("embedder_name",default="ResNet100GLint360K",type=str);
     #similarity_thresh=request.form.get("similarity_thresh",0.6,type=float)
+    gender_age=ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
     embedder=ModelLoader.load_embedder(embedder_name)
     detector=ModelLoader.load_detector(detector_name)
     uploaded_images = request.form.getlist("images")
@@ -416,7 +417,7 @@ def checkisfamily():
         for i in range(2):
             img,faces=helper._ImageHelper__extract_faces(uploaded_images[i],detector);
             if faces:
-                Genders[i]=faces[0].gender;
+                Genders[i]= gender_age.get_gender(img,faces[0]);
        
         #  if(i==0):
         #   landmarks1.append(extract_landmark_features(faces[0]))

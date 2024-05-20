@@ -595,7 +595,7 @@ class ImageHelper:
         index_groups = {value: np.where(labels == value)[0] for value in unique_values}
         value_groups = {
             int(key): [
-                self.emb_manager.db_embeddings[detector_name].embeddings[embedder_name].embeddings[index].name
+                self.emb_manager.get_embedding(index,detector_name,embedder_name).name
                 for index in indexes
             ]
             for key, indexes in index_groups.items()

@@ -43,19 +43,6 @@ def download_models():
         "Detectors":"1gm8KET04Q-ZGIfAX9M0dHUtHPuSRK8EW",
         "GenderAge":"1kEil84PS1Sp_yAQ9SLAVbeNzdLl5Peu3"
     }
-<<<<<<< HEAD
-    detector_file_ids = {
-        "retinanet": "1j4Dm8TguSTk7iCiwCxxeZNZf8Ey0UYF6",
-        "scrfd": "1Gp9nI1M9jjYP9evRikkSV9RINQ4eVF30",
-    }
-    gender_age_file_ids = {
-        "mobilenet_genderage": "1BPvWSCmvGeTzS0y30BMeEYypnoLiSMfP",
-    }
-    for model in embedder_file_ids:
-        download_model(model,embedder_file_ids[model],os.path.join("Face_Server", "OnnxModels", "Embedders"))
-=======
->>>>>>> 5baa0bb (update readme and install.py and update requirements.txt)
-
     for model in model_ids:
         download_models_gdrive(model,model_ids[model],os.path.join("Face_Server", "OnnxModels", model))
 

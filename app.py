@@ -649,8 +649,8 @@ app.secret_key = "your_secret_key"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
-# manager = InMemoryImageEmbeddingManager(APP_DIR)
-manager = MilvusImageEmbeddingManager("http://localhost:19530")
+manager = InMemoryImageEmbeddingManager(APP_DIR)
+# manager = MilvusImageEmbeddingManager("http://localhost:19530")
 groups = ImageGroupRepository(APP_DIR)
 helper = ImageHelper(
     groups, manager, UPLOAD_FOLDER, STATIC_FOLDER

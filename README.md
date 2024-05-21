@@ -44,16 +44,20 @@ you may need additional dependencies such as:
 - [microsoft visual c++ build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) , make sure to choose c++ in the install wizard, it could also be installed already through visual studio
 
 ### Option 1 - Script
+First, you'll need to install some Prerequisites
+```bash
+pip install gdown gitpython
+```
+  **Run as administrator if using powershell on windows**
 you can use the script in [here](assets/install.py) to automatically clone both frontend and server repositories, setup all requirements with virtual enviornments and download the onnx models
 ### Option 2 - Manual
 #### Clone the Repository
 
 ```bash
 
-git clone https://github.com/ofekhta1/image_rec_new_ofek_version.git
+git clone https://github.com/ofekhta1/Face-Server.git
 
-cd  image_rec_new_ofek_version
-# should probably rename it
+cd  Face-Server
 
 ```
 

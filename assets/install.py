@@ -5,7 +5,7 @@ import sys
 import gdown
 import zipfile
 
-
+major,minor=0
 def clone_repo(repo_url, destination):
     git.Repo.clone_from(repo_url, destination)
 
@@ -22,10 +22,11 @@ def install_requirements(repo_path):
 
 
 def check_python_version():
+    global major,minor
     major, minor = sys.version_info[:2]
-    if major != 3:
+    if major != 3 or minor<10 or minor >11:
         print(
-            "Error: This script requires Python version 3.x, 3.10-3.12 is recommended"
+            "Error: This script requires Python version 3.x, 3.10-3.11 is recommended"
         )
         sys.exit(1)
 def download_models_gdrive(model_name:str,model_file_id:str,save_path:str):
@@ -68,7 +69,7 @@ def main():
     # Create a virtual environment
     if not os.path.exists(".venv"):
         print("Creating virtual environment...")
-        subprocess.run(["python", "-m", "venv", ".venv"])
+        subprocess.run([sys.executable, "-m", "venv", ".venv"])
         print("Virtual environment created successfully.")
 
     # Activate the virtual environment

@@ -49,28 +49,6 @@ class FamilyClassifier:
             features.append(feature)
             
         return np.array(features)
-
-
-        return np.array(features)
-    def predict_batch(self, similarities, genders1):
-     new_data = [
-        {
-            "Gender1": genders1[i],
-            "Gender2": genders1[i],
-            "similarity": similarities[i]
-        }
-        for i in range(len(similarities))
-    ]
-     features = self.__create_batch_features(pd.DataFrame(new_data))
-     features_scaled = self.scaler.transform(features)
-     prediction = self.model.predict(features_scaled)
-     return prediction[0],similarities
-
-    #  invert male and female
-    def __map_gender(self,gender):
-        if(gender==1):
-            return 0
-        elif(gender==0):
-            return 1
-        else:
-            return -1
+    #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
+    def __gender_to_numeric(self,gender):
+        return 1 if gender == 'W' else 0

@@ -9,10 +9,10 @@ from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10
 # 
 from models.similar_image import SimilarImage
 from . import util,image_embedding_manager,image_group_repository;
-from sklearn.cluster import DBSCAN, AgglomerativeClustering
+from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
-from .model_loader import ModelLoader
+import time
 from modules.models.embedders import BaseEmbedderModel
 from modules.models.detectors import BaseDetectorModel
 
@@ -34,7 +34,7 @@ class ImageHelper:
     def __init__(
         self,
         groups: image_group_repository.ImageGroupRepository,
-        emb_manager: image_embedding_manager.ImageEmbeddingManager,
+        emb_manager: in_memory_image_embedding_manager.InMemoryImageEmbeddingManager,
         UPLOAD_FOLDER,
         STATIC_FOLDER,
     ):
@@ -170,7 +170,10 @@ class ImageHelper:
 
         for i in range(len(faces)):
             embedding = embedder.embed(img, faces[i])
-            embeddings.append(np.array(embedding))
+            embedding=np.array(embedding)
+            norm = np.linalg.norm(embedding)
+            embedding=embedding/norm;
+            embeddings.append(embedding)
             aligned_filename = f"aligned_{i}_{filename}"
 
             aligned_images.append(aligned_filename)
@@ -361,25 +364,26 @@ class ImageHelper:
         k=5,
     ):
         np_emb = np.array(user_embedding).astype("float32").reshape(1, -1)
+
+        start = time.time()
+
         result = self.emb_manager.search(np_emb, k + 1, detector_name, embedder_name)
+        end = time.time()
+        print(f"Elapsed Search Time: {(end - start)*1000} ms")
         filtered = []
         seen_distances = []
         for r in result:
             if r["distance"] not in seen_distances:
                 seen_distances.append(r["distance"])
                 i = r["index"]
-                name = self.emb_manager.get_embedding(
-                    i, detector_name, embedder_name
-                ).name
+                name = r['Embedding'].name
                 if name.split("_")[-1] != filename.split("_")[-1]:
-                    filtered.append({"index": i, "name": name})
+                    filtered.append({"index": i, "name": name,"Embedding":r['Embedding']})
         valid = [
             x
             for x in filtered
             if len(
-                emb := self.emb_manager.get_embedding(
-                    x["index"], detector_name, embedder_name
-                ).embedding
+                emb := x["Embedding"].embedding
             )
             > 0
             and not np.allclose(emb, np_emb, rtol=1e-5, atol=1e-8)
@@ -390,7 +394,7 @@ class ImageHelper:
         manager = self.emb_manager
         errors = []
         embeddings = (
-            manager.db_embeddings[detector_name].embeddings[embedder_name].embeddings
+            manager.get_all_embeddings(detector_name,embedder_name)
         )
         original_length = len(embeddings)
         for embedding in embeddings:
@@ -454,9 +458,12 @@ class ImageHelper:
         aligned_filename = (
             f"aligned_{0 if selected_face == -2 else selected_face}_{filename}"
         )
+        start = time.time()
         embedding = self.emb_manager.get_embedding_by_name(
             aligned_filename, detector_name=detector.name, embedder_name=embedder.name
         )
+        end = time.time()
+        print(f"Elapsed Get Embedding Time: {(end - start)*1000}ms")
         if len(embedding.embedding) > 0:
             user_embedding = embedding.embedding
         else:
@@ -465,6 +472,9 @@ class ImageHelper:
             )
             errors = errors + temp_err
         if len(errors) == 0:
+            start = time.time()
+
+        
             valid = self.get_similar_images(
                 user_embedding,
                 filename=filename,
@@ -472,16 +482,14 @@ class ImageHelper:
                 embedder_name=embedder.name,
                 k=k,
             )
+            end = time.time()
+            print(f"Elapsed Similar Images Time: {(end - start)*1000}ms")
             for image in valid:
                 try:
                     match = image["name"]
                     _, facenum, filename = match.split("_", 2)
                     similarity = util.calculate_similarity(
-                        self.emb_manager.get_embedding(
-                            image["index"],
-                            detector_name=detector.name,
-                            embedder_name=embedder.name,
-                        ).embedding,
+                        image['Embedding'].embedding,
                         user_embedding,
                     )
                     if similarity > threshold:
@@ -586,12 +594,8 @@ class ImageHelper:
         self, max_distance, min_samples, detector_name, embedder_name
     ) -> dict[int, list[str]]:
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings
-        embeddings = [
-            e.embedding
-            for e in self.emb_manager.db_embeddings[detector_name]
-            .embeddings[embedder_name]
-            .embeddings
-        ]
+        face_embeddings =self.emb_manager.get_all_embeddings(detector_name,embedder_name)
+        embeddings=[e.embedding for e in face_embeddings]
         if len(embeddings) == 0:
             return {}
         #create a similarity matrix that includes the cosine similarity between every 2 images in the embedding data
@@ -605,79 +609,18 @@ class ImageHelper:
         index_groups = {value: np.where(labels == value)[0] for value in unique_values}
         value_groups = {
             int(key): [
-                self.emb_manager.get_embedding(index,detector_name,embedder_name).name
+                self.emb_manager.db_embeddings[detector_name].embeddings[embedder_name].embeddings[index].name
                 for index in indexes
             ]
             for key, indexes in index_groups.items()
         }
-        return value_groups; 
-    def run_over_all_files_in_directory(directory):
-     images=[]
-     for root, dirs, files in os.walk(directory):
-        for file in files:
-            file_path = os.path.join(root, file)
-            images.append(file_path)
-     return images
-
-    def cluster_images_family(
-        self, max_distance, min_samples, detector_name, embedder_name
-    ) -> dict[int, list[str]]:
-        # Assuming 'embeddings' is a list of your 512-dimensional embeddings
-        embeddings = [
-            e.embedding
-            for e in self.emb_manager.db_embeddings[detector_name]
-            .embeddings[embedder_name]
-            .embeddings
-        ]
-        similarities = [[] for _ in range(len(embeddings))]
-        detector=ModelLoader.load_detector(detector_name)
-        import app
-        static_folder=app.STATIC_FOLDER
-        directory_path = os.path.join(static_folder, detector_name)
-        images= ImageHelper.run_over_all_files_in_directory(directory_path)
-        Genders1 = [[] for _ in range(len(images)-2)]
-        gender_age=ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
-        
-
-        
-        if len(embeddings) == 0:
-            return {}
-        for i in range(len(embeddings)):
-         for j in range(i + 1, len(embeddings)):
-           similarity = util.calculate_similarity(embeddings[i], embeddings[j])
-           similarities[i].append(similarity)
-         img,faces=self.__extract_faces(images[i],detector,True);
-         if faces:
-          gender1=  gender_age.get_gender(img,faces[0])
-          Genders1[i] = gender1
-         else:
-          Genders1[i]=0
-             
-        
-      
-        gender_combinations = np.empty((30, 30), dtype=object)
-        for i in range(len(embeddings)):
-         for j in range(len(embeddings)):
-           if Genders1[i] == Genders1[j]:
-             gender_combinations[i, j] = Genders1[i]
-           else:
-             gender_combinations[i, j] = Genders1[j]  
-        classifier= FamilyClassifier(app.APP_DIR);
-        is_same_family,similar=classifier.predict_batch(similarities,gender_combinations);
-        
-           
-        #     is_same_family,similar=classifier.predict(similarity,Genders[0],Genders[1]);
-        #   if is_same_family:
-        #       val = [[embeddings[i], embeddings[j], 1]]
-        #       cluster_family_arr.append(val)
-        # print(cluster_family_arr)
-    
-      
+        return value_groups;
     # def cluster_images_without_family(self, max_distance, min_samples, model_name, family_distance_threshold) -> dict[int, dict[int, list[str]]]:
     
     #  embeddings = [e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
     #  if len(embeddings) == 0:
     #     return {}
+    
     #  similarity_matrix = cosine_similarity(embeddings)
     #  similarity_matrix = np.clip(similarity_matrix, -1, 1)
     #  dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric="precomputed")

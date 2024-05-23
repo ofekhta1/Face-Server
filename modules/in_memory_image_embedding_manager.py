@@ -9,7 +9,7 @@ from .model_loader import ModelLoader
 import math
 from .util import norm_path
 
-class ImageEmbeddingManager:
+class InMemoryImageEmbeddingManager:
     def __init__(self,root_path:str):
         
         self.db_embeddings:dict[str,StoredDetectorEmbeddings]={};
@@ -24,6 +24,14 @@ class ImageEmbeddingManager:
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
         embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return embeddings;
+    def get_all_embeddings(self,detector_name:str,embedder_name:str)->list[FaceEmbedding]:
+        embeddings = [
+            e
+            for e in self.db_embeddings[detector_name]
+            .embeddings[embedder_name]
+            .embeddings
+        ]
+        return embeddings
 
     def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str):
         self.db_embeddings[detector_name].add_embedding(embedder_name,embedding,name,box);
@@ -73,7 +81,9 @@ class ImageEmbeddingManager:
         else:
             data.index = faiss.IndexFlatIP(512);
             data.index.add(np.vstack([e.embedding for e in data.embeddings]))
-        return self.find_closest_vector(data,embedding,k);
+        results=self.find_closest_vector(data,embedding,k);
+        return results;
+         
     def delete_all(self):
         for detector_name,copy in self.db_embeddings.items():
             self.db_embeddings[detector_name]=StoredDetectorEmbeddings({},pkl_path=copy.PKL_PATH);
@@ -109,7 +119,8 @@ class ImageEmbeddingManager:
 
         for i in range(len(distances[0])):
             if(indexes[0][i]>-1):
-                obj = {'index': indexes[0][i], 'distance': distances[0][i]}
+                face_emb=data.embeddings[indexes[0][i]]
+                obj = {'index': indexes[0][i], 'distance': distances[0][i],"Embedding":face_emb}
                 result.append(obj)
         return result;
 

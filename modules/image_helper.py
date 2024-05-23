@@ -3,6 +3,7 @@ import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
 
+from modules import in_memory_image_embedding_manager
 from modules.family_classifier import FamilyClassifier
 from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
 

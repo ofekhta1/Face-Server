@@ -36,8 +36,36 @@ class FamilyClassifier:
             # Combine the features into a single feature array
             feature = np.concatenate(([gender_pic1_numeric, gender_pic2_numeric, similarity_score],))
             features.append(feature)
+        return np.array(features)
+    def __create_batch_features(self, df):
+        features = []
+        for _, row in df.iterrows():
+            gender_pic1_numeric = self.__map_gender(row['Gender1'])
+            similarity_score = row['similarity']  # Ensure the column name is correct
+
+            # Combine the features into a single feature array
+            feature = np.array([gender_pic1_numeric, similarity_score])
+            
+            features.append(feature)
+            
+        return np.array(features)
+
 
         return np.array(features)
+    def predict_batch(self, similarities, genders1):
+     new_data = [
+        {
+            "Gender1": genders1[i],
+            "Gender2": genders1[i],
+            "similarity": similarities[i]
+        }
+        for i in range(len(similarities))
+    ]
+     features = self.__create_batch_features(pd.DataFrame(new_data))
+     features_scaled = self.scaler.transform(features)
+     prediction = self.model.predict(features_scaled)
+     return prediction[0],similarities
+
     #  invert male and female
     def __map_gender(self,gender):
         if(gender==1):

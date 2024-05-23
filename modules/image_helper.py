@@ -1,6 +1,11 @@
+import sys
 import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
+
+from modules.family_classifier import FamilyClassifier
+from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
+
 # 
 from models.similar_image import SimilarImage
 from . import util,in_memory_image_embedding_manager,image_group_repository;
@@ -104,13 +109,17 @@ class ImageHelper:
             images.append(aligned_filename)
         return img, faces, errors
 
-    def __extract_faces(self, filename: str, model: BaseDetectorModel):
-        if filename.startswith("aligned_") or filename.startswith("detected_"):
-            path = os.path.join(self.STATIC_FOLDER, model.name, filename)
+    def __extract_faces(self, filename: str, model: BaseDetectorModel,iscluster=False):
+        if filename.startswith("aligned_") or filename.startswith("detected_") or iscluster==True:
+            if(iscluster==False):
+             path = os.path.join(self.STATIC_FOLDER, model.name, filename)
+            else:
+              path = filename
         else:
             path = os.path.join(self.UPLOAD_FOLDER, filename)
         img = cv2.imread(path)
         return img, model.extract_faces(img)
+       
 
     @staticmethod
     def extract_embedding(face_data):
@@ -579,6 +588,7 @@ class ImageHelper:
             else:
                 most_similar_image = best_match_image_1
         return most_similar_image, box, best_match_score, errors
+        
 
     def cluster_images(
         self, max_distance, min_samples, detector_name, embedder_name

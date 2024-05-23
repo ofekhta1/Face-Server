@@ -5,7 +5,9 @@ import sys
 from modules import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager,ImageHelper,ImageGroupRepository,FamilyClassifier,ModelLoader,util
 from flask_cors import CORS
 import numpy as np
+from insightface.app import FaceAnalysis
 from flask import send_from_directory
+from sklearn.metrics.pairwise import cosine_similarity
 import json
 import traceback
 import time
@@ -359,7 +361,16 @@ def improve_image():
             "messages":messages,
         }
     )
+def load_model_for_embedding():
+    try:
+        model_name = 'arcface_r100_v1'
+        embedder = FaceAnalysis(model=model_name)
+        embedder.prepare(ctx_id=0, det_thresh=0.5, det_size=(64, 64))
+        return embedder
 
+    except Exception as e:
+        print("Error during embedder model initialization:", e)
+        return None
 
 @app.route("/api/check_family", methods=["POST"])
 def checkisfamily():
@@ -380,7 +391,10 @@ def checkisfamily():
         for i in range(len(uploaded_images)):
             #check if first name embedding already exists in repository
             aligned_filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
+
             embedding = manager.get_embedding_by_name(aligned_filename,detector_name,embedder_name).embedding
+            # embedder_name = load_model_for_embedding()
+            # embedding=ImageHelper.extract_embedding(uploaded_images[0])
             if len(embedding) > 0:
                 embeddings.append(embedding)
             else:
@@ -608,10 +622,12 @@ def get_groups():
     retrain=data["retrain"] if "retrain" in data else False; 
     detector_name=data["detector_name"] if "detector_name" in data else "SCRFD10G"
     embedder_name=data["embedder_name"] if "embedder_name" in data else "ResNet100GLint360K"
+    uploaded_images = request.form.getlist("images")
     cluster_family = data.get("cluster_family", False)
     #for now- if it's the same family its change the threshold to 0.13
     if (cluster_family):
-      eps=0.87  
+      eps=0.87 
+    value_groups=helper.cluster_images_family(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
     value_groups=helper.cluster_images(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
     
    

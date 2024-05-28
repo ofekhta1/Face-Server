@@ -1,7 +1,9 @@
 import sys
 import os
+from tkinter import Image
 import traceback
 import insightface
+import numpy as np
 from ..face_analysis import FaceAnalysis
 from .base_detector_model import BaseDetectorModel
 from modules.util import are_bboxes_similar
@@ -26,7 +28,7 @@ class BaseInsightfaceDetector(BaseDetectorModel):
             tb = traceback.format_exc()
             print("Error during model initialization:", e)
             return None
-
+  
     def extract_faces(self,img):
         try:
             close_results=self.detector_zoomed.detect(img,
@@ -35,7 +37,7 @@ class BaseInsightfaceDetector(BaseDetectorModel):
             far_results=self.detector.detect(img,
                                         max_num=100,
                                         metric='default')
-            
+          
             close_faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(close_results[0],close_results[1])]
             far_faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(far_results[0],far_results[1])]
 
@@ -51,3 +53,6 @@ class BaseInsightfaceDetector(BaseDetectorModel):
         except Exception as e:
             print("Error during face extraction:", e)
             return None;
+   
+   
+    

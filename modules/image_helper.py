@@ -5,11 +5,16 @@ import os
 
 from modules import in_memory_image_embedding_manager
 from modules.family_classifier import FamilyClassifier
+from modules.model_loader import ModelLoader
 from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
 
 # 
 from models.similar_image import SimilarImage
+<<<<<<< HEAD
 from . import util,in_memory_image_embedding_manager,image_group_repository;
+=======
+from . import util,image_group_repository;
+>>>>>>> 5705cce (BATCH_VERSION2)
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
@@ -590,6 +595,13 @@ class ImageHelper:
                 most_similar_image = best_match_image_1
         return most_similar_image, box, best_match_score, errors
         
+    def run_over_all_files_in_directory(directory):
+     images=[]
+     for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            images.append(file_path)
+     return images
 
     def cluster_images(
         self, max_distance, min_samples, detector_name, embedder_name
@@ -615,4 +627,140 @@ class ImageHelper:
             ]
             for key, indices in index_groups.items()
         }
+        return value_groups;
+    def cluster_images_family(self, max_distance, min_samples, detector_name, embedder_name) -> dict[int, list[str]]:
+       
+       
+        detector = ModelLoader.load_detector(detector_name)
+        import app
+        embeddings=[]
+        static_folder = app.STATIC_FOLDER
+        directory_path = os.path.join(static_folder, detector_name)
+        images = ImageHelper.run_over_all_files_in_directory(directory_path)
+        for img in images[:-2]:
+         file_name = os.path.basename(img)
+         embedding = app.manager.get_embedding_by_name(file_name,detector_name,embedder_name).embedding
+         if len(embedding) > 0:
+                embeddings.append(embedding)
+        similarities = [[] for _ in range(len(embeddings))]
+        Genders1 = [[] for _ in range(len(images) - 2)]
+        gender_age = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
+
+        if len(embeddings) == 0:
+            return {}
+
+        for i in range(len(embeddings)):
+            for j in range(len(embeddings)):
+                if i != j:
+                 similarity = util.calculate_similarity(embeddings[i], embeddings[j])
+                 similarities[i].append(similarity)
+            img, faces = self.__extract_faces(images[i], detector, True)
+            if faces:
+                gender1 = gender_age.get_gender(img, faces[0])
+                Genders1[i] = gender1
+            else:
+                Genders1[i] = 0
+
+        gender_combinations = np.empty((len(embeddings), len(embeddings)), dtype=object)
+        for i in range(len(embeddings)):
+            for j in range(len(embeddings)):
+                if Genders1[i] == Genders1[j]:
+                    gender_combinations[i, j] = Genders1[i]
+                else:
+                    gender_combinations[i, j] = Genders1[j]
+
+        classifier = FamilyClassifier(app.APP_DIR)
+        is_same_family = classifier.predict_batch(similarities, gender_combinations)
+        distance_matrix = 1 - is_same_family
+        dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric='precomputed')
+        labels = dbscan.fit_predict(distance_matrix)
+        value_groups = {}
+        for label in np.unique(labels):
+         if label != -1:  # Exclude noise points
+            value_groups[int(label)] = [images[i] for i in range(len(labels)) if labels[i] == label]
+
         return value_groups
+
+      
+        # clusters = {}
+        # for i in range(len(is_same_family)):
+        #     for j in range(i + 1, len(is_same_family)):
+        #      if is_same_family[i, j] == 1:  # Assuming 1 indicates same family
+        #         if i not in clusters:
+        #             clusters[i] = [i]
+        #         if j not in clusters[i]:
+        #             clusters[i].append(j)
+        
+
+        # value_groups = {}
+        # group_id = 0
+        # for key, members in clusters.items():
+        #  value_groups[group_id] = [images[i] for i in members]
+        #  group_id += 1
+
+        #  return value_groups
+    # def cluster_images_without_family(self, max_distance, min_samples, model_name, family_distance_threshold) -> dict[int, dict[int, list[str]]]:
+    
+    #  embeddings = [e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
+    #  if len(embeddings) == 0:
+    #     return {}
+    
+    #  similarity_matrix = cosine_similarity(embeddings)
+    #  similarity_matrix = np.clip(similarity_matrix, -1, 1)
+    #  dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric="precomputed")
+    #  labels = dbscan.fit_predict(1 - similarity_matrix)
+    #  unique_values = np.unique(labels)
+    #  index_groups = {value: np.where(labels == value)[0] for value in unique_values}
+    #  clusters = {}
+    #  centroids = []
+    #  for key, indexes in index_groups.items():
+    #      cluster_embeddings = np.array([embeddings[index] for index in indexes])
+    #      centroid = np.mean(cluster_embeddings, axis=0)
+    #      centroids.append(centroid)
+    #      clusters[int(key)] = [self.emb_manager.db_embeddings[model_name].embeddings[index].name for index in indexes]
+    #  if len(clusters) <= family_distance_threshold:
+    #      return {0: clusters}
+    #  centroid_similarity_matrix = cosine_similarity(centroids)
+    #  centroid_distance_matrix = 1 - np.clip(centroid_similarity_matrix, -1, 1)
+    #  agglomerative = AgglomerativeClustering(n_clusters=None, distance_threshold=family_distance_threshold, affinity="precomputed", linkage="average")
+    #  family_labels = agglomerative.fit_predict(centroid_distance_matrix)
+    #  family_clusters = {}
+    #  for cluster_id, family_id in enumerate(family_labels):
+    #     if family_id not in family_clusters:
+    #         family_clusters[family_id] = {}
+    #     if cluster_id in clusters:
+    #         family_clusters[family_id][cluster_id] = clusters[cluster_id]
+    #     else:
+    #         print(f"Warning: cluster_id {cluster_id} not found in clusters")
+     
+    #  family_clusters = {k: v for k, v in family_clusters.items() if v}
+    #  return family_clusters
+    
+    # def cluster_family_images(self,model_name,APP_DIR,uploaded_images,model):
+    #     cluster_family_arr = []
+    #     # Assuming 'embeddings' is a list of your 512-dimensional embeddings
+    #     embeddings=[e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]
+    #     if(len(embeddings)==0):
+    #         return {}
+    #     for i in range(len(embeddings)):
+    #      for j in range(i + 1, len(embeddings)):
+    #       similarity = util.calculate_similarity(embeddings[i], embeddings[j])
+    #       classifier= FamilyClassifier(APP_DIR);
+    #       Genders=[0,0]
+    #       for i in range(2):
+    #           img,faces=self.__extract_faces(uploaded_images[i],model);
+    #           if faces:
+    #               Genders[i]=faces[0].gender;
+    #       is_same_family,similar=classifier.predict(similarity,Genders[0],Genders[1]);
+    #       if is_same_family:
+    #           val = [[embeddings[i], embeddings[j], 1]]
+    #           cluster_family_arr.append(val)
+    #     print(cluster_family_arr)
+
+        # from app import APP_DIR
+       # for i in range(len(embeddings) - 1):
+    
+            
+
+
+       

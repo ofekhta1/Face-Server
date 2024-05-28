@@ -1,10 +1,7 @@
 import sys
 import os
-from tkinter import Image
 import traceback
 import insightface
-import numpy as np
-from ..face_analysis import FaceAnalysis
 from .base_detector_model import BaseDetectorModel
 from modules.util import are_bboxes_similar
 sys.path.append(os.path.abspath('..'))
@@ -53,6 +50,7 @@ class BaseInsightfaceDetector(BaseDetectorModel):
         except Exception as e:
             print("Error during face extraction:", e)
             return None;
+   
    
    
     

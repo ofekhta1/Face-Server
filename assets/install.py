@@ -44,12 +44,8 @@ def download_models():
         "Detectors":"1gm8KET04Q-ZGIfAX9M0dHUtHPuSRK8EW",
         "GenderAge":"1kEil84PS1Sp_yAQ9SLAVbeNzdLl5Peu3"
     }
-    for model in embedder_file_ids:
-        download_model(model,embedder_file_ids[model],os.path.join("Face_Server", "OnnxModels", "Embedders"))
-
-    for model in detector_file_ids:
-        download_model(model,detector_file_ids[model],os.path.join("Face_Server", "OnnxModels", "Detectors"))
-
+    for model in model_ids:
+        download_models_gdrive(model,model_ids[model],os.path.join("Face_Server", "OnnxModels", model))
 
 
 def main():
@@ -73,14 +69,8 @@ def main():
     # Create a virtual environment
     if not os.path.exists(".venv"):
         print("Creating virtual environment...")
-        subprocess.run([f"python{major}.{minor}", "-m", "venv", ".venv"])
+        subprocess.run([sys.executable, "-m", "venv", ".venv"])
         print("Virtual environment created successfully.")
-
-    # Activate the virtual environment
-    if os.name == "nt":  # For Windows
-        activate_script = ".venv\\Scripts\\activate"
-    else:  # For Unix-like systems
-        activate_script = ".venv/bin/activate"
 
     # Install requirements for the first repository
     print("Installing requirements for Face_Frontend...")

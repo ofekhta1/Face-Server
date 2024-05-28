@@ -627,19 +627,40 @@ def get_groups():
     cluster_family = data.get("cluster_family", False)
     #for now- if it's the same family its change the threshold to 0.13
     if (cluster_family):
-      eps=0.87 
-    value_groups=helper.cluster_images_family(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
-    value_groups=helper.cluster_images(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
-    
-   
-    if(retrain):
+     value_groups=helper.cluster_images_family(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
+     if retrain:
+            try:
+                groups.train_index(value_groups, detector_name, embedder_name)
+                groups.save_index(detector_name)
+                value_groups_str = {str(k): [os.path.basename(image_path) for image_path in v] for k, v in value_groups.items()}
+                return jsonify(value_groups_str)
+            except Exception as e:
+                print(f"An error occurred during retraining: {e}")
+                return jsonify({"error": str(e)}), 500
+     modified_group = {}
+     index = groups.groups[detector_name].groups[embedder_name].index
+     for cluster_id, images in value_groups.items():
+            cluster_id_str = str(cluster_id)  # Ensure cluster_id is a string
+            for image in images:
+                group_name = cluster_id_str
+                if image in index:
+                    group_name = index[image]
+                if group_name in modified_group:
+                    modified_group[group_name].append(image)
+                else:
+                    modified_group[group_name] = [image]
+
+     return jsonify(modified_group)
+    else:
+     value_groups=helper.cluster_images(eps,min_samples,detector_name=detector_name,embedder_name=embedder_name);
+     if(retrain):
         groups.train_index(value_groups,detector_name,embedder_name);
         groups.save_index(detector_name);
         return jsonify(value_groups);
-    modified_group:dict[str,list]={};
-    index=groups.groups[detector_name].groups[embedder_name].index;
-    for cluster_id,images in value_groups.items():
-        for image in images:
+     modified_group:dict[str,list]={};
+     index=groups.groups[detector_name].groups[embedder_name].index;
+     for cluster_id,images in value_groups.items():
+         for image in images:
             group_name=cluster_id;
             if(image in index):
                 group_name=index[image];
@@ -647,7 +668,7 @@ def get_groups():
                 modified_group[group_name].append(image);
             else:
                 modified_group[group_name]=[image];
-    return jsonify(modified_group);
+     return jsonify(modified_group);
 
 
 @app.route("/api/change_group_name", methods=["POST"])

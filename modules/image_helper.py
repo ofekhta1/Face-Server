@@ -5,11 +5,12 @@ import os
 
 from modules import in_memory_image_embedding_manager
 from modules.family_classifier import FamilyClassifier
+from modules.model_loader import ModelLoader
 from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
 
 # 
 from models.similar_image import SimilarImage
-from . import util,image_embedding_manager,image_group_repository;
+from . import util,image_group_repository;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
@@ -590,6 +591,13 @@ class ImageHelper:
                 most_similar_image = best_match_image_1
         return most_similar_image, box, best_match_score, errors
         
+    def run_over_all_files_in_directory(directory):
+     images=[]
+     for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            images.append(file_path)
+     return images
 
     def cluster_images(
         self, max_distance, min_samples, detector_name, embedder_name
@@ -616,6 +624,77 @@ class ImageHelper:
             for key, indexes in index_groups.items()
         }
         return value_groups;
+    def cluster_images_family(self, max_distance, min_samples, detector_name, embedder_name) -> dict[int, list[str]]:
+       
+       
+        detector = ModelLoader.load_detector(detector_name)
+        import app
+        embeddings=[]
+        static_folder = app.STATIC_FOLDER
+        directory_path = os.path.join(static_folder, detector_name)
+        images = ImageHelper.run_over_all_files_in_directory(directory_path)
+        for img in images[:-2]:
+         file_name = os.path.basename(img)
+         embedding = app.manager.get_embedding_by_name(file_name,detector_name,embedder_name).embedding
+         if len(embedding) > 0:
+                embeddings.append(embedding)
+        similarities = [[] for _ in range(len(embeddings))]
+        Genders1 = [[] for _ in range(len(images) - 2)]
+        gender_age = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
+
+        if len(embeddings) == 0:
+            return {}
+
+        for i in range(len(embeddings)):
+            for j in range(len(embeddings)):
+                if i != j:
+                 similarity = util.calculate_similarity(embeddings[i], embeddings[j])
+                 similarities[i].append(similarity)
+            img, faces = self.__extract_faces(images[i], detector, True)
+            if faces:
+                gender1 = gender_age.get_gender(img, faces[0])
+                Genders1[i] = gender1
+            else:
+                Genders1[i] = 0
+
+        gender_combinations = np.empty((len(embeddings), len(embeddings)), dtype=object)
+        for i in range(len(embeddings)):
+            for j in range(len(embeddings)):
+                if Genders1[i] == Genders1[j]:
+                    gender_combinations[i, j] = Genders1[i]
+                else:
+                    gender_combinations[i, j] = Genders1[j]
+
+        classifier = FamilyClassifier(app.APP_DIR)
+        is_same_family = classifier.predict_batch(similarities, gender_combinations)
+        distance_matrix = 1 - is_same_family
+        dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric='precomputed')
+        labels = dbscan.fit_predict(distance_matrix)
+        value_groups = {}
+        for label in np.unique(labels):
+         if label != -1:  # Exclude noise points
+            value_groups[int(label)] = [images[i] for i in range(len(labels)) if labels[i] == label]
+
+        return value_groups
+
+      
+        # clusters = {}
+        # for i in range(len(is_same_family)):
+        #     for j in range(i + 1, len(is_same_family)):
+        #      if is_same_family[i, j] == 1:  # Assuming 1 indicates same family
+        #         if i not in clusters:
+        #             clusters[i] = [i]
+        #         if j not in clusters[i]:
+        #             clusters[i].append(j)
+        
+
+        # value_groups = {}
+        # group_id = 0
+        # for key, members in clusters.items():
+        #  value_groups[group_id] = [images[i] for i in members]
+        #  group_id += 1
+
+        #  return value_groups
     # def cluster_images_without_family(self, max_distance, min_samples, model_name, family_distance_threshold) -> dict[int, dict[int, list[str]]]:
     
     #  embeddings = [e.embedding for e in self.emb_manager.db_embeddings[model_name].embeddings]

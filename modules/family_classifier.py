@@ -27,8 +27,8 @@ class FamilyClassifier:
     def __create_features(self,df):
         features = []
         for _, row in df.iterrows():
-            gender_pic1_numeric =self.__map_gender(row['Gender1'])
-            gender_pic2_numeric =self.__map_gender(row['Gender2'])
+            gender_pic1_numeric = self.__gender_to_numeric(row['Gender1'])
+            gender_pic2_numeric = self.__gender_to_numeric(row['Gender2'])
             similarity_score = row['similatrity']  # Make sure this column name is correct
             # landmarks1 = row['landmarks1'].flatten()  # Flatten the landmarks array
             # landmarks2 = row['landmarks2'].flatten()  # Flatten the landmarks array
@@ -37,18 +37,30 @@ class FamilyClassifier:
             feature = np.concatenate(([gender_pic1_numeric, gender_pic2_numeric, similarity_score],))
             features.append(feature)
         return np.array(features)
-    def __create_batch_features(self, df):
-        features = []
-        for _, row in df.iterrows():
-            gender_pic1_numeric = self.__map_gender(row['Gender1'])
-            similarity_score = row['similarity']  # Ensure the column name is correct
+    def predict_batch(self, similarities, gender_combinations):
+        batch_data = []
+        for i in range(len(similarities)):
+            for j in range(len(similarities[i])):
+                new_data = {
+                    "Gender1": gender_combinations[i][j],
+                    "Gender2": gender_combinations[j][i],
+                    "similatrity": similarities[i][j]
+                }
+                batch_data.append(new_data)
+        
+        features = self.__create_features(pd.DataFrame(batch_data))
+        features_scaled = self.scaler.transform(features)
+        predictions = self.model.predict(features_scaled)
+        predictions_reshaped = np.zeros((len(similarities), len(similarities)))
+        index = 0
+        for i in range(len(similarities)):
+            for j in range(len(similarities[i])):
+                if i != j:
+                 predictions_reshaped[i, j] = predictions[index]
+                 index += 1
+        
+        return predictions_reshaped
 
-            # Combine the features into a single feature array
-            feature = np.array([gender_pic1_numeric, similarity_score])
-            
-            features.append(feature)
-            
-        return np.array(features)
     #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
     def __gender_to_numeric(self,gender):
         return 1 if gender == 'W' else 0

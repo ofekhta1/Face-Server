@@ -19,4 +19,6 @@ class MobileNet_CelebA(BaseGenderAgeModel):
         #male:1 female:0
     def get_gender(self, img, face):
         result=self.genderage.get(img,face);
-        return result[0];
+        if result[0] == 0:
+            return "W";
+        return "M";

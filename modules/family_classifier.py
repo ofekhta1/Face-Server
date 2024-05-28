@@ -37,13 +37,13 @@ class FamilyClassifier:
             feature = np.concatenate(([gender_pic1_numeric, gender_pic2_numeric, similarity_score],))
             features.append(feature)
         return np.array(features)
-    def predict_batch(self, similarities, gender_combinations):
+    def predict_batch(self, similarities, genders):
         batch_data = []
         for i in range(len(similarities)):
             for j in range(len(similarities[i])):
                 new_data = {
-                    "Gender1": gender_combinations[i][j],
-                    "Gender2": gender_combinations[j][i],
+                    "Gender1": genders[i],
+                    "Gender2": genders[j],
                     "similatrity": similarities[i][j]
                 }
                 batch_data.append(new_data)
@@ -51,15 +51,7 @@ class FamilyClassifier:
         features = self.__create_features(pd.DataFrame(batch_data))
         features_scaled = self.scaler.transform(features)
         predictions = self.model.predict(features_scaled)
-        predictions_reshaped = np.zeros((len(similarities), len(similarities)))
-        index = 0
-        for i in range(len(similarities)):
-            for j in range(len(similarities[i])):
-                if i != j:
-                 predictions_reshaped[i, j] = predictions[index]
-                 index += 1
-        
-        return predictions_reshaped
+        return predictions.reshape(len(similarities),len(similarities))
 
     #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)
     def __gender_to_numeric(self,gender):

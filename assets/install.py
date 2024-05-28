@@ -72,12 +72,6 @@ def main():
         subprocess.run([sys.executable, "-m", "venv", ".venv"])
         print("Virtual environment created successfully.")
 
-    # Activate the virtual environment
-    if os.name == "nt":  # For Windows
-        activate_script = ".venv\\Scripts\\activate"
-    else:  # For Unix-like systems
-        activate_script = ".venv/bin/activate"
-
     # Install requirements for the first repository
     print("Installing requirements for Face_Frontend...")
     install_requirements("Face_Frontend")

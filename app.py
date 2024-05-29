@@ -10,6 +10,7 @@ from modules import (
     FamilyClassifier,
     ModelLoader,
     util,
+    config
 )
 from flask_cors import CORS
 import numpy as np
@@ -735,8 +736,15 @@ app.secret_key = "your_secret_key"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ROOT_FOLDER"] = APP_DIR
 
-manager = InMemoryImageEmbeddingManager(APP_DIR)
-# manager = MilvusImageEmbeddingManager("http://localhost:19530")
+cfg=config.load_config("config.json")
+match cfg.store.lower():
+    case "milvus":
+        manager = MilvusImageEmbeddingManager("http://localhost:19530")
+    case "memory":
+        manager = InMemoryImageEmbeddingManager(APP_DIR)
+    case _:
+        manager = InMemoryImageEmbeddingManager(APP_DIR)
+        
 groups = ImageGroupRepository(APP_DIR)
 helper = ImageHelper(groups, manager, UPLOAD_FOLDER, STATIC_FOLDER)
 for model_name, _ in ModelLoader.detectors.items():

@@ -2,20 +2,18 @@ import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
 
-from modules import in_memory_image_embedding_manager
-from modules.family_classifier import FamilyClassifier
-from modules.model_loader import ModelLoader
-from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
+from .stores import in_memory_image_embedding_manager,image_group_repository
+from modules.models import ModelLoader
 from insightface.app.common import Face
 # 
 from models.similar_image import SimilarImage
-from . import util,in_memory_image_embedding_manager,image_group_repository;
+from . import util;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import time
-from modules.models.embedders import BaseEmbedderModel
-from modules.models.detectors import BaseDetectorModel
+from modules.models import BaseEmbedderModel
+from modules.models import BaseDetectorModel
 
 
 class ImageHelper:
@@ -633,9 +631,11 @@ class ImageHelper:
             _, facenum, filename = embeddings[i].name.split("_", 2)
             
             img=self.__load_image(filename,detector)
-            gender = gender_age.get_gender(img, f)
-            Genders.append(gender)
-
+            if(not img is None):
+                gender = gender_age.get_gender(img, f)
+                Genders.append(gender)
+            else:
+                Genders.append('W');
         is_same_family = classifier.predict_batch(similarity_matrix, Genders)
         distance_matrix = 1 - is_same_family
         dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric='precomputed')

@@ -1,7 +1,4 @@
-from .models import SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
-from .models.embedders.base_embedder_model import BaseEmbedderModel
-from .models.detectors.base_detector_model import BaseDetectorModel
-from .models.genderage import BaseGenderAgeModel,MobileNet_CelebA
+from . import BaseDetectorModel,BaseEmbedderModel,BaseGenderAgeModel,MobileNet_CelebA,SCRFD10G,ResNet50WebFace600K,ResNet100GLint360K,RetinaFace10GF
 
 class ModelLoader:
     embedders={"ResNet100GLint360K":ResNet100GLint360K,"ResNet50WebFace600K":ResNet50WebFace600K}

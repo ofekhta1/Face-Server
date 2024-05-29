@@ -3,10 +3,9 @@ import numpy as np
 import sys
 sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
-from .model_loader import ModelLoader
-import math
+from ..models.model_loader import ModelLoader
 from pymilvus import MilvusClient,DataType
-from .util import norm_path
+from ..util import norm_path
 
 class MilvusImageEmbeddingManager:
     def __init__(self,uri):
@@ -61,7 +60,7 @@ class MilvusImageEmbeddingManager:
         return embeddings;#convert to array
     def get_all_embeddings(self,detector_name:str,embedder_name:str):
         collection_name=self.get_collection_name(detector_name,embedder_name)
-        results=self.client.query(collection_name,f"Id > 0",output_fields=["Embedding","FileName","FaceNum"])
+        results=self.client.query(collection_name,f"Id > 0",output_fields=["Embedding","FileName","FaceNum","Box"])
         return [self.__build_face_embedding(r) for r in results];
 
     def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str):

@@ -3,7 +3,7 @@ import os;
 import sys
 sys.path.append(os.path.abspath('..'))
 from models.stored_group import StoredDetectorGroup,StoredGroup
-from .model_loader import ModelLoader
+from ..models import ModelLoader
 
 class ImageGroupRepository:
     def __init__(self,root_path:str):

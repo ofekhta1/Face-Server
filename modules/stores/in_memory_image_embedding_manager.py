@@ -5,9 +5,9 @@ import numpy as np
 import sys
 sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
-from .model_loader import ModelLoader
+from ..models.model_loader import ModelLoader
 import math
-from .util import norm_path
+from ..util import norm_path
 
 class InMemoryImageEmbeddingManager:
     def __init__(self,root_path:str):

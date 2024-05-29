@@ -1,0 +1,13 @@
+{
+    "Store":"memory",
+    "Models":{
+        "Embedders":{
+            "ResNet100GLint360K":{
+                
+            },
+            "ResNet50WebFace600K":{
+
+            }
+        }
+    }
+}

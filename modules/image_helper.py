@@ -6,14 +6,14 @@ from .stores import in_memory_image_embedding_manager,image_group_repository
 from modules.models import ModelLoader
 from insightface.app.common import Face
 # 
+from models.stored_embedding import FaceEmbedding
 from models.similar_image import SimilarImage
 from . import util;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import time
-from modules.models import BaseEmbedderModel
-from modules.models import BaseDetectorModel
+from modules.models import BaseGenderAgeModel,BaseDetectorModel,BaseEmbedderModel,FamilyClassifier
 
 
 class ImageHelper:
@@ -148,7 +148,7 @@ class ImageHelper:
         else:
             errors.append("Error: detector model not initialized.")
         return embeddings, errors
-
+   
     def generate_all_emb(
         self,
         img,
@@ -156,13 +156,13 @@ class ImageHelper:
         filename: str,
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
-        save=True,
-    ) -> tuple[np.typing.NDArray[np.uint8], list, list[np.ndarray], list[str]]:
+        gender_age:BaseGenderAgeModel=None
+    ) -> tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding], list[str]]:
         errors = []
         if not faces:
             print("No faces detected.")  # Debug log
             errors.append("No faces detected in one or both images.")
-            return img, None, [], errors
+            return img, None, errors
 
         aligned_images = []
         embeddings = []
@@ -208,19 +208,15 @@ class ImageHelper:
         filtered_embeddings = [e for e in embeddings if e is not None]
         filtered_faces = [f for f in faces if f is not None]
         filtered_aligned_images = [ai for ai in aligned_images if ai is not None]
-        if save:
-            for i in range(len(filtered_faces)):
-                box = filtered_faces[i]["bbox"].astype(int).tolist()
-                self.emb_manager.add_embedding(
-                    filtered_embeddings[i],
-                    filtered_aligned_images[i],
-                    box,
-                    detector.name,
-                    embedder.name,
-                )
-
+        face_embeddings=[]
+        for i in range(len(filtered_faces)):
+            f=FaceEmbedding(filtered_aligned_images[i],[int(coord) for coord in filtered_faces[i]['bbox']],filtered_embeddings[i])
+            if(gender_age):
+                f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);
+            face_embeddings.append(f);
+            
         # self.emb_manager.set_face_count(filename,len(filtered_faces),detector_name=model.name)
-        return img, filtered_faces, filtered_embeddings, errors
+        return img, face_embeddings, errors
 
     @staticmethod
     def points(numpoints, max_val, template_path, image_path):
@@ -614,28 +610,14 @@ class ImageHelper:
             for key, indices in index_groups.items()
         }
         return value_groups;
-    def cluster_images_family(self, max_distance, min_samples, detector_name, embedder_name,classifier) -> dict[int, list[str]]:
-       
-       
-        detector = ModelLoader.load_detector(detector_name)
+    def cluster_images_family(self, max_distance, min_samples, detector_name:str, embedder_name:str,classifier:FamilyClassifier) -> dict[int, list[str]]:
         embeddings=[]
         embeddings=self.emb_manager.get_all_embeddings(detector_name=detector_name,embedder_name=embedder_name);
         Genders = []
-        gender_age = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
-
         if len(embeddings) == 0:
             return {}
         similarity_matrix = cosine_similarity([e.embedding for e in embeddings])
-        for i in range(len(embeddings)):
-            f=Face({"bbox":embeddings[i].box})
-            _, facenum, filename = embeddings[i].name.split("_", 2)
-            
-            img=self.__load_image(filename,detector)
-            if(not img is None):
-                gender = gender_age.get_gender(img, f)
-                Genders.append(gender)
-            else:
-                Genders.append('W');
+        Genders=[e.gender for e in embeddings]
         is_same_family = classifier.predict_batch(similarity_matrix, Genders)
         distance_matrix = 1 - is_same_family
         dbscan = DBSCAN(eps=max_distance, min_samples=min_samples, metric='precomputed')

@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
 from ..models.model_loader import ModelLoader
 from pymilvus import MilvusClient,DataType
-from ..util import norm_path
+from typing import Union,List
 
 class MilvusImageEmbeddingManager:
     def __init__(self,uri):
@@ -26,6 +26,8 @@ class MilvusImageEmbeddingManager:
                     schema.add_field(field_name="Box", datatype=DataType.ARRAY, element_type=DataType.INT32, max_capacity=4)
                     schema.add_field(field_name="FileName", datatype=DataType.VARCHAR,max_length=128)
                     schema.add_field(field_name="FaceNum", datatype=DataType.INT16)
+                    schema.add_field(field_name="Age", datatype=DataType.INT16)
+                    schema.add_field(field_name="Gender", datatype=DataType.VARCHAR,max_length=5)
                     index_params = self.client.prepare_index_params()
                     index_params.add_index(
                         field_name="Embedding",
@@ -62,8 +64,31 @@ class MilvusImageEmbeddingManager:
         collection_name=self.get_collection_name(detector_name,embedder_name)
         results=self.client.query(collection_name,f"Id > 0",output_fields=["Embedding","FileName","FaceNum","Box"])
         return [self.__build_face_embedding(r) for r in results];
+    def __generate_data_from_face_embedding(self,embedding:FaceEmbedding):
+        parts=embedding.name.split('_',2);
+        filename=parts[-1];
+        face_num=int(parts[-2])
+        data={
+            "Embedding":embedding.embedding,
+            "FileName":filename,
+            "FaceNum":face_num,
+            "Box":embedding.box,
+            "Age":embedding.age,
+            "Gender":embedding.gender
+        }
+        return data;
+    def add_embedding_typed(self,embedding:Union[FaceEmbedding,List[FaceEmbedding]],detector_name:str,embedder_name:str):
+        collection_name=self.get_collection_name(detector_name,embedder_name)
+        if isinstance(embedding, FaceEmbedding):
+            data:dict=self.__generate_data_from_face_embedding(embedding);
+        elif isinstance(embedding,list):
+            data:list[dict]=[];
+            for emb in embedding:
+                data.append(self.__generate_data_from_face_embedding(emb));
+                
+        res=self.client.insert(collection_name,data)
 
-    def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str):
+    def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str,**kwargs):
         collection_name=self.get_collection_name(detector_name,embedder_name)
         parts=name.split('_',2);
         filename=parts[-1];
@@ -72,8 +97,12 @@ class MilvusImageEmbeddingManager:
             "Embedding":embedding,
             "FileName":filename,
             "FaceNum":face_num,
-            "Box":box
+            "Box":box,
+            "Age":embedding.age,
+            "Gender":embedding.gender
         }
+        for key,value in kwargs.items():
+            data[key]=value
         res=self.client.insert(collection_name,data)
             
     def remove_embedding_by_index(self,index:int,detector_name:str,embedder_name:str):

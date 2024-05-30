@@ -1,12 +1,15 @@
 from faiss import IndexIVFPQ,IndexHNSWFlat,IndexFlatIP
 import numpy as np
-
+from typing import Union,List
 
 class FaceEmbedding:
-    def __init__(self,name:str,box:list[int],embedding:np.ndarray):
+    def __init__(self,name:str,box:list[int],embedding:np.ndarray,gender:str="",age:int=-1):
         self.name=name
         self.box=box#[x1,y1,x2,y2]
         self.embedding=embedding
+        self.gender=gender
+        self.age=age
+
 
 
 class StoredEmbeddings:
@@ -29,15 +32,33 @@ class StoredDetectorEmbeddings:
     def remove_embedding_by_index(self,model_name:str,index:int):
         if(index>-1):
             self.embeddings[model_name].embeddings.pop(index);
-    
-    def add_embedding(self,model_name:str,embedding:list[float],name:str,box:list[int]):
-        existing=self.get_embedding_by_name(model_name,name);
-        if(not existing or len(existing.embedding)==0):
-            np_emb=np.array(embedding);
+    def add_embedding_typed(self,model_name:str,embedding:Union[FaceEmbedding,List[FaceEmbedding]]):
+        if isinstance(embedding, FaceEmbedding):
+            existing=self.get_embedding_by_name(model_name,embedding.name);
+            if(not existing or len(existing.embedding)==0):
+                if(model_name in self.embeddings):
+                    self.embeddings[model_name].embeddings.append(embedding);
+                else:
+                    self.embeddings[model_name]=StoredEmbeddings([embedding])
+        elif isinstance(embedding,list):
             if(model_name in self.embeddings):
-                self.embeddings[model_name].embeddings.append(FaceEmbedding(name,box,np_emb));
+                for emb in embedding:
+                    existing=self.get_embedding_by_name(model_name,emb.name);
+                    if(not existing or len(existing.embedding)==0):
+                        self.embeddings[model_name].embeddings.append(emb);
             else:
-                self.embeddings[model_name]=StoredEmbeddings([FaceEmbedding(name,box,np_emb)])
+                self.embeddings[model_name]=StoredEmbeddings(embedding)
+    
+    def add_embedding(self,model_name:str,embedding:list[float],name:str,box:list[int],**kwargs):
+        np_emb=np.array(embedding);
+        emb=FaceEmbedding(name,box,np_emb)
+        if("gender" in kwargs):
+            emb.gender=kwargs["gender"]
+        if("age" in kwargs):
+            emb.age=kwargs["age"]
+        self.add_embedding_typed(model_name,emb);
+
+
     def get_embedding(self,model_name:str,idx:int)->FaceEmbedding:
         if(len(self.embeddings[model_name].embeddings)>idx):
             return self.embeddings[model_name].embeddings[idx];

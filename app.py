@@ -135,6 +135,7 @@ def upload_image():
     # get request parameters
     return_detector = request.form.get("detector_name", "SCRFD10G", type=str)
     return_embedder = request.form.get("embedder_name", "ResNet100GLint360K", type=str)
+    gender_age_model = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA");
     save_invalid = request.form.get("save_invalid", False, type=bool)
     # true if images will be saved without containing faces
     i = -1
@@ -163,14 +164,18 @@ def upload_image():
                                 file.filename, detector, []
                             )
                             # Generate the embeddings for all faces and store them for future indexing
-                            img, faces, embeddings, temp_err = helper.generate_all_emb(
-                                img, faces, file.filename, detector, embedder
+                            img, face_embeddings, temp_err = helper.generate_all_emb(
+                                img, faces, file.filename, detector, embedder,gender_age_model
                             )
+                           
                             detector_indices[i][return_detector] = list(
-                                range(len(embeddings))
+                                range(len(face_embeddings))
                             )
+                            manager.add_embedding_typed(face_embeddings,detector_name,embedder_name)
+                            if(face_embeddings is None):
+                                    continue;
                             generated_embeddings[f"{detector_name}_{embedder_name}"] = (
-                                np.array(embeddings)
+                                np.array([e.embedding for e in face_embeddings])
                             )
                             errors = errors + temp_err
                             # if its the model name that was submitted in the request
@@ -202,7 +207,6 @@ def upload_image():
                                     valid_images.append(file.filename)
                             # save the current database state
                         manager.save(detector_name)
-
                     detector_indices[i] = util.get_all_detectors_faces(
                         generated_embeddings, return_detector
                     )
@@ -398,9 +402,10 @@ def improve_image():
                 img, faces, temp_err = helper.create_aligned_images(
                     "enhanced_" + image, detector, []
                 )
-                _, _, _, temp_err = helper.generate_all_emb(
+                img, faces, embeddings,aligned_images, temp_err = helper.generate_all_emb(
                     img, faces, "enhanced_" + image, detector, embedder
                 )
+                helper.save_embeddings(faces,embeddings,aligned_images,detector_name,embedder_name);
                 errors = errors + temp_err
 
                 if len(temp_err) > 0:
@@ -754,6 +759,7 @@ for model_name, _ in ModelLoader.detectors.items():
 for model_name, _ in ModelLoader.embedders.items():
     ModelLoader.load_embedder(model_name, APP_DIR)
 
+ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA",APP_DIR);
 if __name__ == "__main__":
     try:
         app.run(debug=True, port=5057, use_reloader=False)

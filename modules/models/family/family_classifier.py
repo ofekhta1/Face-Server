@@ -50,7 +50,7 @@ class FamilyClassifier:
         
         features = self.__create_features(pd.DataFrame(batch_data))
         features_scaled = self.scaler.transform(features)
-        predictions = self.model.predict(features_scaled)
+        predictions = self.model.predict_proba(features_scaled)[:,1]
         return predictions.reshape(len(similarities),len(similarities))
 
     #  Convert gender to numeric (e.g., 'M' to 0 and 'W' to 1)

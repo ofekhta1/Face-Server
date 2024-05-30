@@ -17,8 +17,8 @@ class MobileNet_CelebA(BaseGenderAgeModel):
             print("Error during model initialization:", e)
             return None
         #male:1 female:0
-    def get_gender(self, img, face):
+    def get_gender_age(self, img, face):
         result=self.genderage.get(img,face);
         if result[0] == 0:
-            return "W";
-        return "M";
+            return "W",result[1];
+        return "M",result[1];

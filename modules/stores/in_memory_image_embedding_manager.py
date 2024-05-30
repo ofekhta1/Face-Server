@@ -3,6 +3,7 @@ import faiss
 import os
 import numpy as np
 import sys
+from typing import Union,List
 sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
 from ..models.model_loader import ModelLoader
@@ -32,6 +33,9 @@ class InMemoryImageEmbeddingManager:
             .embeddings
         ]
         return embeddings
+    
+    def add_embedding_typed(self,embedding:Union[FaceEmbedding,List[FaceEmbedding]],detector_name:str,embedder_name:str):
+        self.db_embeddings[detector_name].add_embedding_typed(embedder_name,embedding);
 
     def add_embedding(self,embedding:np.ndarray[np.float32],name:str,box:list[int],detector_name:str,embedder_name:str):
         self.db_embeddings[detector_name].add_embedding(embedder_name,embedding,name,box);

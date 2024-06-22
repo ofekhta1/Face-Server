@@ -1,5 +1,5 @@
 {
-    "Store":"milvus",
+    "Store":"memory",
     "Models":{
         "Embedders":{
             "ResNet100GLint360K":{

@@ -21,16 +21,16 @@ class InMemoryImageEmbeddingManager:
     def get_image_boxes(self,filename:str,detector_name:str,embedder_name:str):
         boxes=[e.box for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return boxes;
-
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
         embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return embeddings;
-    def get_all_embeddings(self,detector_name:str,embedder_name:str)->list[FaceEmbedding]:
+    def get_all_embeddings(self,detector_name:str,embedder_name:str,dedup=True)->list[FaceEmbedding]:
         embeddings = [
             e
             for e in self.db_embeddings[detector_name]
             .embeddings[embedder_name]
             .embeddings
+            if not dedup or e.is_dup == False
         ]
         return embeddings
     
@@ -75,8 +75,10 @@ class InMemoryImageEmbeddingManager:
         data.index = faiss.IndexHNSWFlat( d,M);
         data.index.add(embeddings);
     
-    def search(self,embedding:np.ndarray[np.float32],k:int,detector_name:str,embedder_name:str):
+    def search(self,q_embeddings:np.ndarray[np.float32],k:int,detector_name:str,embedder_name:str):
         data=self.db_embeddings[detector_name].embeddings[embedder_name];
+        if(len(data.embeddings)==0):
+            return []
         # Define the number of clusters (nlist) for the IVFPQ index
         threshold = 25600;
         if len(data.embeddings)>=threshold:
@@ -85,7 +87,7 @@ class InMemoryImageEmbeddingManager:
         else:
             data.index = faiss.IndexFlatIP(512);
             data.index.add(np.vstack([e.embedding for e in data.embeddings]))
-        results=self.find_closest_vector(data,embedding,k);
+        results=self.find_closest_vector(data,q_embeddings,k);
         return results;
          
     def delete_all(self):
@@ -114,18 +116,20 @@ class InMemoryImageEmbeddingManager:
             with open(path, 'rb') as file:
                 self.db_embeddings[detector_name] = pickle.load(file)
 
-    def find_closest_vector(self,data:StoredEmbeddings,new_vector:np.ndarray[np.float32],k:int):
+    def find_closest_vector(self,data:StoredEmbeddings,q_vectors:np.ndarray[np.float32],k:int):
 
-        distances,indexes = data.index.search(new_vector, k)
+        distances,indexes = data.index.search(q_vectors, k)
         # return indexes based on distance
         # Create a list of objects
         result = []
-
-        for i in range(len(distances[0])):
-            if(indexes[0][i]>-1):
-                face_emb=data.embeddings[indexes[0][i]]
-                obj = {'index': indexes[0][i], 'distance': distances[0][i],"Embedding":face_emb}
-                result.append(obj)
+        for i in range(len(distances)):
+            query_result=[]
+            for j in range(len(distances[0])):
+                if(indexes[i][j]>-1):
+                    face_emb=data.embeddings[indexes[i][j]]
+                    obj = {'index': indexes[i][j], 'distance': distances[i][j],"Embedding":face_emb}
+                    query_result.append(obj)
+            result.append(query_result)
         return result;
 
     

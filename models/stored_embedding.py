@@ -9,6 +9,7 @@ class FaceEmbedding:
         self.embedding=embedding
         self.gender=gender
         self.age=age
+        self.is_dup=False
 
 
 

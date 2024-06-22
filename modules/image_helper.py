@@ -178,7 +178,7 @@ class ImageHelper:
             aligned_images.append(aligned_filename)
             # face_count += 1
 
-        # dedup code
+        # internal dedup code
 
         similarity_matrix = cosine_similarity(embeddings)
         similarity_matrix = np.clip(similarity_matrix, -1, 1)
@@ -212,9 +212,18 @@ class ImageHelper:
         for i in range(len(filtered_faces)):
             f=FaceEmbedding(filtered_aligned_images[i],[int(coord) for coord in filtered_faces[i]['bbox']],filtered_embeddings[i])
             if(gender_age):
-                f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);
+                f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);          
             face_embeddings.append(f);
-            
+        #check if embeddings exist in emb_manager,in batch
+        query=np.array([f.embedding for f in face_embeddings])
+        similar=self.emb_manager.search(query,1,detector.name,embedder.name)
+        distance_dup_thresh=0.95
+        for i in range(len(similar)):
+            closest=similar[i][0]
+            if closest['distance']> distance_dup_thresh:
+                face_embeddings[i].is_dup=True
+
+        
         # self.emb_manager.set_face_count(filename,len(filtered_faces),detector_name=model.name)
         return img, face_embeddings, errors
 
@@ -367,7 +376,7 @@ class ImageHelper:
         print(f"Elapsed Search Time: {(end - start)*1000} ms")
         filtered = []
         seen_distances = []
-        for r in result:
+        for r in result[0]:
             if r["distance"] not in seen_distances:
                 seen_distances.append(r["distance"])
                 i = r["index"]

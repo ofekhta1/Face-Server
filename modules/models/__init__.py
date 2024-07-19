@@ -1,5 +1,5 @@
-from .face_embedding.detectors import BaseDetectorModel,RetinaFace10GF,SCRFD10G
-from .face_embedding.embedders import BaseEmbedderModel,ResNet100GLint360K,ResNet50WebFace600K,Kinship_BB
+from .face_embedding.detectors import BaseDetectorModel,RetinaFace10GF,SCRFD10G,EranRetinaFaceDetector
+from .face_embedding.embedders import BaseEmbedderModel,ResNet100GLint360K,ResNet50WebFace600K,Kinship_BB,Kinship_FS
 from .face_embedding.genderage import BaseGenderAgeModel,MobileNet_CelebA
 from .face_embedding import base_model
 from .family.family_classifier import FamilyClassifier

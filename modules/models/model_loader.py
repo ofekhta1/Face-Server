@@ -1,13 +1,13 @@
-from . import (BaseDetectorModel,BaseEmbedderModel,
+from . import (BaseDetectorModel,BaseEmbedderModel,EranRetinaFaceDetector,
                BaseGenderAgeModel,MobileNet_CelebA,
                SCRFD10G,ResNet50WebFace600K,
-               ResNet100GLint360K,RetinaFace10GF,Kinship_BB)
+               ResNet100GLint360K,RetinaFace10GF,Kinship_FS,Kinship_BB)
 
 class ModelLoader:
-    embedders={"ResNet100GLint360K":ResNet100GLint360K,"ResNet50WebFace600K":ResNet50WebFace600K,"KinshipResnet100BB":Kinship_BB}
-    detectors={"SCRFD10G": SCRFD10G, "RetinaFace10GF":RetinaFace10GF}
+    embedders={"ResNet100GLint360K":ResNet100GLint360K,"ResNet50WebFace600K":ResNet50WebFace600K,"KinshipResnet100BB":Kinship_BB,
+               "KinshipResnet100FS":Kinship_FS}
+    detectors={"SCRFD10G": SCRFD10G, "RetinaFace10GF":RetinaFace10GF,"EranRetinaFaceDetector":EranRetinaFaceDetector}
     genderAge={"MobileNetCeleb0.25_CelebA": MobileNet_CelebA, "RetinaFace10GF":RetinaFace10GF}
-    # models={"buffalo_l":Buffalo_L,"antelopev2":AntelopeV2}
 
     instances={}
 

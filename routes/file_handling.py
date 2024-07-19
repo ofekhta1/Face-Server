@@ -27,7 +27,6 @@ def upload_image():
     i = -1
     invalid_images = []
     for image_name, file in files:
-        detector_indices
         if file and file.filename:
             filename = file.filename.replace("_", "")
             if ImageHelper.allowed_file(file.filename):
@@ -41,14 +40,14 @@ def upload_image():
                     # load model
                     for detector_name in ModelLoader.detectors:
                         detector = ModelLoader.load_detector(model_name=detector_name)
+                        img, faces, temp_err = helper.create_aligned_images(
+                             file.filename, detector, [])
                         for embedder_name in ModelLoader.embedders:
                             embedder = ModelLoader.load_embedder(
                                 model_name=embedder_name
                             )
                             # Create cropped images for all faces detected and store them in the respective model folder under static/{model}/
-                            img, faces, temp_err = helper.create_aligned_images(
-                                file.filename, detector, []
-                            )
+
                             # Generate the embeddings for all faces and store them for future indexing
                             img, face_embeddings, temp_err = helper.generate_all_emb(
                                 img,

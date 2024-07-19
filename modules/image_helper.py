@@ -466,6 +466,18 @@ class ImageHelper:
         embedding = self.emb_manager.get_embedding_by_name(
             aligned_filename, detector_name=detector.name, embedder_name=embedder.name
         )
+        if(embedding is None):
+            img, faces, temp_err = self.create_aligned_images(
+                filename, detector, []
+            )
+
+            _, new_embs, _ = self.generate_all_emb(
+                img, faces, filename, detector, embedder
+            )
+            self.emb_manager.add_embedding_typed(
+                    new_embs, detector.name, embedder.name
+                )
+            embedding = next((x for x in new_embs if x.name==aligned_filename), None)
         end = time.time()
         print(f"Elapsed Get Embedding Time: {(end - start)*1000}ms")
         if len(embedding.embedding) > 0:

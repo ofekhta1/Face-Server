@@ -7,3 +7,6 @@ __pycache__/
 OnnxModels/*/*.onnx
 OnnxModels/*/*.zip
 volumes/
+experiments/*
+modules/models/face_embedding/detectors/retinaface50/rcnn/**/**.so
+modules/models/face_embedding/detectors/retinaface50/*.params

@@ -33,13 +33,24 @@ def compare_image():
             # check if embedding of face already exists
             embedding = manager.get_embedding_by_name(
                 filename, detector_name, embedder_name
-            ).embedding
-            if len(embedding) > 0:
-                embeddings.append(embedding)
+            )
+            if embedding is not None and len(embedding.embedding)>0:
+                embeddings.append(embedding.embedding)
             else:
-                embedding, temp_err = helper.generate_embedding(
-                    uploaded_images[i], combochanges[i], detector, embedder
+                img, faces, temp_err = helper.create_aligned_images(
+                uploaded_images[i], detector, []
                 )
+
+                _, new_embs, _ = helper.generate_all_emb(
+                    img, faces, uploaded_images[i], detector, embedder
+                )
+                manager.add_embedding_typed(
+                    new_embs, detector_name, embedder_name
+                )
+                emb=[f.embedding for f in new_embs if f.name==filename]
+
+                embeddings.append(emb[0])
+
                 # Add the errors and embeddings from the helper function to the local variables
                 errors = errors + temp_err
                 if embedding is not None:

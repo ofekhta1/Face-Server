@@ -62,14 +62,14 @@ def get_detector_indices():
             img, faces, temp_err = helper.create_aligned_images(
                 filename, temp_detector, []
             )
-
-            _, new_embs, _ = helper.generate_all_emb(
-                img, faces, filename, temp_detector, temp_embedder
-            )
-            manager.add_embedding_typed(
-                    new_embs, detector_name, embedder_name
+            if img is not None and faces is not None:
+                _, new_embs, _ = helper.generate_all_emb(
+                    img, faces, filename, temp_detector, temp_embedder
                 )
-            embs=np.array([f.embedding for f in new_embs])
+                manager.add_embedding_typed(
+                        new_embs, detector_name, embedder_name
+                    )
+                embs=np.array([f.embedding for f in new_embs])
 
         generated_embeddings[f"{detector_name}_{embedder_name}"] = embs
 

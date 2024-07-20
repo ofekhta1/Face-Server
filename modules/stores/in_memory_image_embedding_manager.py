@@ -17,7 +17,9 @@ class InMemoryImageEmbeddingManager:
         for detector_name,_ in ModelLoader.detectors.items():
             PKL_PATH=os.path.join(root_path,"static",detector_name,"embeddings.pkl");
             self.db_embeddings[detector_name]= StoredDetectorEmbeddings({},pkl_path=PKL_PATH)
-
+    def get_by_md5Hash(self,md5_hash:str,detector_name:str,embedder_name:str):
+        embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.md5_hash==md5_hash];
+        return embeddings;
     def get_image_boxes(self,filename:str,detector_name:str,embedder_name:str):
         boxes=[e.box for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return boxes;

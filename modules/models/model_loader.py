@@ -2,12 +2,16 @@ from . import (BaseDetectorModel,BaseEmbedderModel,EranRetinaFaceDetector,
                BaseGenderAgeModel,MobileNet_CelebA,
                SCRFD10G,ResNet50WebFace600K,
                ResNet100GLint360K,RetinaFace10GF,Kinship_FS,Kinship_BB)
+from models.detector_name import DetectorName
+from models.embedder_name import EmbedderName
 
 class ModelLoader:
-    embedders={"ResNet100GLint360K":ResNet100GLint360K,"ResNet50WebFace600K":ResNet50WebFace600K,"KinshipResnet100BB":Kinship_BB,
-               "KinshipResnet100FS":Kinship_FS}
-    detectors={"SCRFD10G": SCRFD10G, "RetinaFace10GF":RetinaFace10GF,"EranRetinaFaceDetector":EranRetinaFaceDetector}
-    genderAge={"MobileNetCeleb0.25_CelebA": MobileNet_CelebA, "RetinaFace10GF":RetinaFace10GF}
+    embedders={EmbedderName.resnet100:ResNet100GLint360K,EmbedderName.resnet50:ResNet50WebFace600K,EmbedderName.bb:Kinship_BB,
+               EmbedderName.fs:Kinship_FS}
+    detectors={DetectorName.retinaface_antelope: SCRFD10G, DetectorName.retinaface_buffalo:RetinaFace10GF
+               ,DetectorName.eran_retinaface:EranRetinaFaceDetector}
+    
+    genderAge={"MobileNetCeleb0.25_CelebA": MobileNet_CelebA}
 
     instances={}
 

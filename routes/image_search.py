@@ -2,8 +2,9 @@ from flask import Blueprint, request, jsonify
 from modules import AppPaths,ModelLoader,util,FamilyClassifier
 from . import resources 
 import numpy as np
-
+from models.stored_embedding import FaceEmbedding
 image_search_bp = Blueprint('Image Search', __name__)
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 
@@ -151,6 +152,69 @@ def checkisfamily():
         }
     )
 
+@image_search_bp.route("/api/compare_kinship", methods=["POST"])
+def compare_kinship():
+    helper=resources.helper
+    manager=resources.manager
+    detector_name = request.form.get("detector_name", default="EranRetinaFaceDetector", type=str)
+    embedder_name = request.form.get(
+        "embedder_name", default="ResNet100GLint360K", type=str
+    )
+    kinship_embedder_name = request.form.get(
+        "kinship_embedder_name", default="KinshipResnet100BB", type=str
+    )
+    similarity_thresh = request.form.get("similarity_thresh", 0.5, type=float)
+    embedder = ModelLoader.load_embedder(embedder_name)
+    detector = ModelLoader.load_detector(detector_name)
+    uploaded_images = request.form.getlist("images")
+    # helper.cluster_family_images(model_name,APP_DIR,uploaded_images,model)
+    image_count= len(uploaded_images)
+    combochanges = [int(x) for x in request.form.getlist("selected_faces")]
+    embeddings:list[list[FaceEmbedding]] = [[] for _ in range(image_count)]
+
+    # check if the user uploaded 2 face images
+    if image_count == 2:
+        for i in range(image_count):
+            # check if first name embedding already exists in repository
+            face_num=0 if combochanges[i] == -2 else combochanges[i]
+            aligned_filename = f"aligned_{face_num}_{uploaded_images[i]}"
+
+            existing_embedding = manager.get_embedding_by_name(
+                aligned_filename, detector_name, embedder_name
+            )
+            if(existing_embedding is None):
+                img, faces, temp_err = helper.create_aligned_images(
+                    uploaded_images[i], detector, []
+                )
+                if img is not None:
+                    _, new_embs, _ = helper.generate_all_emb(
+                        img, faces, uploaded_images[i], detector, embedder
+                    )
+                    manager.add_embedding_typed(
+                            new_embs, detector_name, embedder_name
+                        )
+                    embedding=new_embs[face_num]
+            else:
+                embedding=existing_embedding
+
+            similar_images=helper.get_similar_images(embedding.embedding,aligned_filename,detector_name,embedder_name,20);
+            for image in similar_images:
+                if image["similarity"]>=similarity_thresh:
+                    #same person
+                    kinship_embedding=helper.emb_manager.get_by_md5Hash(image["Embedding"].md5_hash,detector_name,kinship_embedder_name)[0]
+                    embeddings[i].append(kinship_embedding)
+            embeddings[i].append(helper.emb_manager.get_by_md5Hash(embedding.md5_hash,detector_name,kinship_embedder_name)[0]);
+
+        kinship_similarity_matrix=cosine_similarity(embeddings[0],embeddings[1])
+        average_similarity = np.mean(kinship_similarity_matrix)
+        print(kinship_similarity_matrix)
+    return jsonify(
+        {
+            "Average_Similarity": average_similarity.astype(float),
+            "Cluster1_Count": len(embeddings[0]),
+            "Cluster2_Count": len(embeddings[1])
+        }
+    )
 
 @image_search_bp.route("/api/check_many", methods=["POST"])
 def find_similar_images():

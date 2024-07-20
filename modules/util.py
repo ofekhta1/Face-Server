@@ -8,10 +8,11 @@ def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_det
         if(detector!=return_detector):
             base_detector_embs = generated_embeddings[f"{return_detector}_{embedder}"]
             other_embeddings = generated_embeddings[f"{detector}_{embedder}"]
-            similarity_matrix = cosine_similarity(base_detector_embs, other_embeddings)
-            print("Similarity Matrix:")
-            print(similarity_matrix)
-            detector_indices[detector]=convert_detector_indices(similarity_matrix);
+            if len(other_embeddings)>0:
+                similarity_matrix = cosine_similarity(base_detector_embs, other_embeddings)
+                print("Similarity Matrix:")
+                print(similarity_matrix)
+                detector_indices[detector]=convert_detector_indices(similarity_matrix);
     
     detector_indices[return_detector]=list(range(len(base_detector_embs)));
 

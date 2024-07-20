@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import time
 from modules.models import BaseGenderAgeModel,BaseDetectorModel,BaseEmbedderModel,FamilyClassifier
-
+import hashlib
 
 class ImageHelper:
 
@@ -163,7 +163,7 @@ class ImageHelper:
             print("No faces detected.")  # Debug log
             errors.append("No faces detected in one or both images.")
             return img, None, errors
-
+        faces=faces.copy();
         aligned_images = []
         embeddings = []
 
@@ -196,11 +196,9 @@ class ImageHelper:
         for group in index_groups:
             # remove all values except for first value per cluster(dups)
             for dups_index in index_groups[group][1:]:
-                os.remove(
-                    os.path.join(
-                        self.STATIC_FOLDER, detector.name, aligned_images[dups_index]
-                    )
-                )
+                dup_path=os.path.join(self.STATIC_FOLDER, detector.name, aligned_images[dups_index])
+                if os.path.exists(dup_path):
+                    os.remove(dup_path)
                 embeddings[dups_index] = None
                 faces[dups_index] = None
                 aligned_images[dups_index] = None
@@ -210,7 +208,13 @@ class ImageHelper:
         filtered_aligned_images = [ai for ai in aligned_images if ai is not None]
         face_embeddings=[]
         for i in range(len(filtered_faces)):
-            f=FaceEmbedding(filtered_aligned_images[i],[int(coord) for coord in filtered_faces[i]['bbox']],filtered_embeddings[i])
+            bbox=[int(coord) for coord in filtered_faces[i]['bbox']]
+            # xmin,ymin,xmax,ymax - getting ROI
+            x_min, y_min, x_max, y_max = bbox
+            roi = img[y_min:y_max, x_min:x_max]
+            roi_bytes = roi.tobytes()
+            md5_hash = hashlib.md5(roi_bytes).hexdigest()
+            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i],md5_hash)
             if(gender_age):
                 f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);          
             face_embeddings.append(f);
@@ -225,7 +229,7 @@ class ImageHelper:
 
         
         # self.emb_manager.set_face_count(filename,len(filtered_faces),detector_name=model.name)
-        return img, face_embeddings, errors
+        return img, face_embeddings,filtered_faces, errors
 
     @staticmethod
     def points(numpoints, max_val, template_path, image_path):
@@ -382,7 +386,7 @@ class ImageHelper:
                 i = r["index"]
                 name = r['Embedding'].name
                 if name.split("_")[-1] != filename.split("_")[-1]:
-                    filtered.append({"index": i, "name": name,"Embedding":r['Embedding']})
+                    filtered.append({"index": i,"similarity":r["distance"], "name": name,"Embedding":r['Embedding']})
         valid = [
             x
             for x in filtered
@@ -502,14 +506,10 @@ class ImageHelper:
             print(f"Elapsed Similar Images Time: {(end - start)*1000}ms")
             for image in valid:
                 try:
-                    match = image["name"]
-                    _, facenum, filename = match.split("_", 2)
-                    similarity = util.calculate_similarity(
-                        image['Embedding'].embedding,
-                        user_embedding,
-                    )
-                    if similarity > threshold:
-                        similar_model = SimilarImage(filename, int(facenum), similarity)
+                    if image["similarity"]>threshold:
+                        match = image["name"]
+                        _, facenum, filename = match.split("_", 2)
+                        similar_model = SimilarImage(filename, int(facenum), image["similarity"])
                         similar_images.append(similar_model)
                 except Exception as e:
                     # template_matching

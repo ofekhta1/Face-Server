@@ -59,7 +59,7 @@
       "op": "Convolution", 
       "name": "conv0", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(7,7)", 
         "no_bias": "True", 
@@ -194,7 +194,7 @@
       "op": "Convolution", 
       "name": "stage1_unit1_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -266,7 +266,7 @@
       "op": "Convolution", 
       "name": "stage1_unit1_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -338,7 +338,7 @@
       "op": "Convolution", 
       "name": "stage1_unit1_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -359,7 +359,7 @@
       "op": "Convolution", 
       "name": "stage1_unit1_sc", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -436,7 +436,7 @@
       "op": "Convolution", 
       "name": "stage1_unit2_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -508,7 +508,7 @@
       "op": "Convolution", 
       "name": "stage1_unit2_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -580,7 +580,7 @@
       "op": "Convolution", 
       "name": "stage1_unit2_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -657,7 +657,7 @@
       "op": "Convolution", 
       "name": "stage1_unit3_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -729,7 +729,7 @@
       "op": "Convolution", 
       "name": "stage1_unit3_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -801,7 +801,7 @@
       "op": "Convolution", 
       "name": "stage1_unit3_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -878,7 +878,7 @@
       "op": "Convolution", 
       "name": "stage2_unit1_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -950,7 +950,7 @@
       "op": "Convolution", 
       "name": "stage2_unit1_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -1022,7 +1022,7 @@
       "op": "Convolution", 
       "name": "stage2_unit1_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1043,7 +1043,7 @@
       "op": "Convolution", 
       "name": "stage2_unit1_sc", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1120,7 +1120,7 @@
       "op": "Convolution", 
       "name": "stage2_unit2_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1192,7 +1192,7 @@
       "op": "Convolution", 
       "name": "stage2_unit2_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -1264,7 +1264,7 @@
       "op": "Convolution", 
       "name": "stage2_unit2_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1341,7 +1341,7 @@
       "op": "Convolution", 
       "name": "stage2_unit3_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1413,7 +1413,7 @@
       "op": "Convolution", 
       "name": "stage2_unit3_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -1485,7 +1485,7 @@
       "op": "Convolution", 
       "name": "stage2_unit3_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1562,7 +1562,7 @@
       "op": "Convolution", 
       "name": "stage2_unit4_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1634,7 +1634,7 @@
       "op": "Convolution", 
       "name": "stage2_unit4_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -1706,7 +1706,7 @@
       "op": "Convolution", 
       "name": "stage2_unit4_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1783,7 +1783,7 @@
       "op": "Convolution", 
       "name": "stage3_unit1_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1855,7 +1855,7 @@
       "op": "Convolution", 
       "name": "stage3_unit1_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -1927,7 +1927,7 @@
       "op": "Convolution", 
       "name": "stage3_unit1_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -1948,7 +1948,7 @@
       "op": "Convolution", 
       "name": "stage3_unit1_sc", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2025,7 +2025,7 @@
       "op": "Convolution", 
       "name": "stage3_unit2_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2097,7 +2097,7 @@
       "op": "Convolution", 
       "name": "stage3_unit2_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -2169,7 +2169,7 @@
       "op": "Convolution", 
       "name": "stage3_unit2_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2246,7 +2246,7 @@
       "op": "Convolution", 
       "name": "stage3_unit3_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2318,7 +2318,7 @@
       "op": "Convolution", 
       "name": "stage3_unit3_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -2390,7 +2390,7 @@
       "op": "Convolution", 
       "name": "stage3_unit3_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2467,7 +2467,7 @@
       "op": "Convolution", 
       "name": "stage3_unit4_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2539,7 +2539,7 @@
       "op": "Convolution", 
       "name": "stage3_unit4_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -2611,7 +2611,7 @@
       "op": "Convolution", 
       "name": "stage3_unit4_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2688,7 +2688,7 @@
       "op": "Convolution", 
       "name": "stage3_unit5_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2760,7 +2760,7 @@
       "op": "Convolution", 
       "name": "stage3_unit5_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -2832,7 +2832,7 @@
       "op": "Convolution", 
       "name": "stage3_unit5_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2909,7 +2909,7 @@
       "op": "Convolution", 
       "name": "stage3_unit6_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -2981,7 +2981,7 @@
       "op": "Convolution", 
       "name": "stage3_unit6_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -3053,7 +3053,7 @@
       "op": "Convolution", 
       "name": "stage3_unit6_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3130,7 +3130,7 @@
       "op": "Convolution", 
       "name": "stage4_unit1_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3202,7 +3202,7 @@
       "op": "Convolution", 
       "name": "stage4_unit1_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -3274,7 +3274,7 @@
       "op": "Convolution", 
       "name": "stage4_unit1_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3295,7 +3295,7 @@
       "op": "Convolution", 
       "name": "stage4_unit1_sc", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3372,7 +3372,7 @@
       "op": "Convolution", 
       "name": "stage4_unit2_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3444,7 +3444,7 @@
       "op": "Convolution", 
       "name": "stage4_unit2_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -3516,7 +3516,7 @@
       "op": "Convolution", 
       "name": "stage4_unit2_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3593,7 +3593,7 @@
       "op": "Convolution", 
       "name": "stage4_unit3_conv1", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 
@@ -3665,7 +3665,7 @@
       "op": "Convolution", 
       "name": "stage4_unit3_conv2", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(3,3)", 
         "no_bias": "True", 
@@ -3737,7 +3737,7 @@
       "op": "Convolution", 
       "name": "stage4_unit3_conv3", 
       "attrs": {
-        "cudnn_tune": "limited_workspace", 
+        "cudnn_tune": "None", 
         "dilate": "(1,1)", 
         "kernel": "(1,1)", 
         "no_bias": "True", 

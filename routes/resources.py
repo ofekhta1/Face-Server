@@ -25,6 +25,14 @@ def init_resources():
             manager = InMemoryImageEmbeddingManager(AppPaths.APP_DIR)
         case _:
             manager = InMemoryImageEmbeddingManager(AppPaths.APP_DIR)
+    for model_name, _ in ModelLoader.detectors.items():
+        ModelLoader.load_detector(model_name, AppPaths.APP_DIR)
+
+    for model_name, _ in ModelLoader.embedders.items():
+        ModelLoader.load_embedder(model_name, AppPaths.APP_DIR)
+
+    ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA", AppPaths.APP_DIR)
+
 
     groups = ImageGroupRepository(AppPaths.APP_DIR)
     helper = ImageHelper(groups, manager, AppPaths.UPLOAD_FOLDER,AppPaths.STATIC_FOLDER)

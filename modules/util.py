@@ -3,6 +3,7 @@ import os
 from sklearn.metrics.pairwise import cosine_similarity
 def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_detector:str):
     detector_indices:dict[str,list[int]]={}
+    base_detector_embs=[]
     for models in generated_embeddings:
         detector,embedder=models.split('_')
         if(detector!=return_detector):
@@ -13,7 +14,7 @@ def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_det
                 print("Similarity Matrix:")
                 print(similarity_matrix)
                 detector_indices[detector]=convert_detector_indices(similarity_matrix);
-    
+
     detector_indices[return_detector]=list(range(len(base_detector_embs)));
 
     return detector_indices;

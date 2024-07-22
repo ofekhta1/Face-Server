@@ -3,20 +3,18 @@ import numpy as np
 from typing import Union,List
 
 class FaceEmbedding:
-    def __init__(self,name:str,box:list[int],embedding:np.ndarray,md5_hash="",gender:str="",age:int=-1):
+    def __init__(self,name:str,box:list[int],embedding:np.ndarray,gender:str="",age:int=-1):
         self.name=name
         self.box=box#[x1,y1,x2,y2]
         self.embedding=embedding
         self.gender=gender
         self.age=age
-        self.md5_hash=md5_hash
         self.is_dup=False
 
     def to_json(self):
         return {
             "embedding_name": self.name,
             "bbox": self.box,
-            "md5":self.md5_hash,
             "gender":self.gender,
             "age":self.age
         }

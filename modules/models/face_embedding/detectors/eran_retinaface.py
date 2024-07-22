@@ -2,7 +2,6 @@ import sys
 import os
 import traceback
 from .retinaface50.retinaface import RetinaFace 
-from models.detector_name import DetectorName
 from .base_detector_model import BaseDetectorModel
 sys.path.append(os.path.abspath('..'))
 from modules.util import are_bboxes_similar
@@ -10,57 +9,54 @@ sys.path.append(os.path.abspath('../..'))
 from insightface.app.common import Face
 import cv2
 import numpy as np
-
+import time
 
 class EranRetinaFaceDetector(BaseDetectorModel):
     def __init__(self,root=""):
-        self.name=DetectorName.eran_retinaface
-        self.model_name = os.path.join(root,"modules","models","face_embedding","detectors","retinaface50","R50"); # Use the face recognition model
+        self.name="EranRetinaFaceDetector"
+        self.model_name = "" # Use the face recognition model
         self.detector= self.CreateDetector()
         self.input_size_zoomed=(640,640)
         # self.input_size=(1024,1024)
     def CreateDetector(self):
         try:
-            detector = RetinaFace(self.model_name,0)
+            detector = RetinaFace('/media/dangrin/Main Volume/Code/Python/FaceRecognition-Python/Face-Server/modules/models/face_embedding/detectors/retinaface50/R50', 0)
             return detector;
         except Exception as e:
             tb = traceback.format_exc()
             print("Error during model initialization:", e)
             return None
-    def __extract_faces_internal(self,img,input_size,resize=False):
+    def __extract_faces_internal(self,img,input_size):
         try:
-            if(resize):
-                im_ratio = float(img.shape[0]) / img.shape[1]
-                model_ratio = float(input_size[1]) / input_size[0]
-                if im_ratio>model_ratio:
-                    new_height = input_size[1]
-                    new_width = int(new_height / im_ratio)
-                else:
-                    new_width = input_size[0]
-                    new_height = int(new_width * im_ratio)
-                    
-                det_scale = float(new_height) / img.shape[0]
-                resized_img = cv2.resize(img, (new_width, new_height))
-                det_img = np.zeros( (input_size[1], input_size[0], 3), dtype=np.uint8 )
-                det_img[:new_height, :new_width, :] = resized_img
+            im_ratio = float(img.shape[0]) / img.shape[1]
+            model_ratio = float(input_size[1]) / input_size[0]
+            if im_ratio>model_ratio:
+                new_height = input_size[1]
+                new_width = int(new_height / im_ratio)
             else:
-                det_img=img;
+                new_width = input_size[0]
+                new_height = int(new_width * im_ratio)
+                
+            det_scale = float(new_height) / img.shape[0]
+            resized_img = cv2.resize(img, (new_width, new_height))
+            det_img = np.zeros( (input_size[1], input_size[0], 3), dtype=np.uint8 )
+            det_img[:new_height, :new_width, :] = resized_img
+            start=time.time()
             bboxes, landmarks = self.detector.detect(det_img,
                                     0.9,
                                     scales=[1.0],
                                     do_flip=False)
-            if resize:
-                bboxes_scaled = bboxes / det_scale
-                landmarks_scaled = landmarks / det_scale
-                faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(bboxes_scaled,landmarks_scaled)]
-            
-            else:
-                faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(bboxes,landmarks) if bbox[4]>=0.9975]
+            end=time.time()
+            print(end-start)
+            bboxes_scaled = bboxes / det_scale
+            landmarks_scaled = landmarks / det_scale
+
+            faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(bboxes_scaled,landmarks_scaled)]
 
             return faces
         except Exception as e:
             print("Error during face extraction:", e)
-            return [];
+            return None;
 
     def extract_faces(self,img):
         # close_faces=self.__extract_faces_internal(img,self.input_size)

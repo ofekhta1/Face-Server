@@ -1,13 +1,14 @@
-from flask import Blueprint, request, jsonify
 from modules import AppPaths,ModelLoader
 from . import resources
 import os
 import cv2
+from fastapi import APIRouter,HTTPException
+from models.requests import ProcessImagesRequest
 
-image_processing_bp = Blueprint('image_processing_bp', __name__)
+image_processing_router=APIRouter()
 
-@image_processing_bp.route("/api/improve", methods=["POST"])
-def improve_image():
+@image_processing_router.post("/api/improve")
+def improve_image(request):
     helper=resources.helper
 
     image = request.form.get("image")
@@ -51,26 +52,24 @@ def improve_image():
             errors.append(str(e))
     else:
         errors.append(f"image {image} is already enhanced!")
-    return jsonify(
-        {
-            "enhanced_image": enhanced_image,
-            "errors": errors,
-            "messages": messages,
-        }
-    )
+
+    return {
+        "enhanced_image": enhanced_image,
+        "errors": errors,
+        "messages": messages,
+    }
 
 
-@image_processing_bp.route("/api/align", methods=["POST"])
-def align_image():
+@image_processing_router.post("/api/align")
+def align_image(request:ProcessImagesRequest):
     helper=resources.helper
     
-    uploaded_images = request.form.getlist("images")
-    detector_name = request.form.get("detector_name", default="SCRFD10G", type=str)
+    uploaded_images = request.images
+    detector_name = request.detector_name
     detector = ModelLoader.load_detector(detector_name)
     faces_length = []
-    messages = []
     errors = []
-    images = []
+    images=[]
     # align the images if they aren't already aligned
     for i in range(len(uploaded_images)):
         filename = uploaded_images[i]
@@ -81,30 +80,25 @@ def align_image():
         if os.path.exists(path):
             _, faces = helper.create_aligned_images(filename, detector, images)
             faces_length.append(len(faces))
-            messages.append(f"{len(faces)} detected faces in {filename}.")
         else:
             errors.append(f"File {filename} does not exist!")
-    return jsonify(
-        {
+    return {
+        
             "images": images,
             "faces_length": faces_length,
             "errors": errors,
-            "messages": messages,
         }
-    )
 
 
 # creates detected images for faces for all uploaded images for a specific model
 # the detected images contain kps (5 points)
-@image_processing_bp.route("/api/detect", methods=["POST"])
-def detect_image():
+@image_processing_router.post("/api/detect")
+def detect_image(request:ProcessImagesRequest):
     helper=resources.helper
-    # current_detected_images = []
-    uploaded_images = request.form.getlist("images")
-    detector_name = request.form.get("detector_name", default="SCRFD10G", type=str)
+    uploaded_images = request.images
+    detector_name = request.detector_name
     detector = ModelLoader.load_detector(detector_name)
     faces_length = []
-    messages = []
     errors = []
     images = []
     for i in range(len(uploaded_images)):
@@ -119,18 +113,14 @@ def detect_image():
 
             if face_count is not None:
                 faces_length.append(face_count)
-                messages.append(f"{face_count} detected faces in {filename}.")
             else:
                 errors.append(
-                    f"you can't detect this File {filename} beacuse its  does not contain a face!"
+                    f"you can't detect this File {filename} beacuse it does not contain a face!"
                 )
         else:
             errors.append(f"File {filename} does not exist!")
-    return jsonify(
-        {
+    return {
             "images": images,
             "faces_length": faces_length,
             "errors": errors,
-            "messages": messages,
         }
-    )

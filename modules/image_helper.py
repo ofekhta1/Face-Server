@@ -1,11 +1,10 @@
 import numpy as np
 from insightface.utils.face_align import norm_crop
 import os
-
+from models.errors import FaceExtractionError,FaceEmbeddingError
 from .stores import in_memory_image_embedding_manager,image_group_repository
 from modules.models import ModelLoader
-from insightface.app.common import Face
-# 
+from models.errors.base_error import BaseError
 from models.stored_embedding import FaceEmbedding
 from models.similar_image import SimilarImage
 from . import util;
@@ -14,7 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import time
 from modules.models import BaseGenderAgeModel,BaseDetectorModel,BaseEmbedderModel,FamilyClassifier
-import hashlib
+
 
 class ImageHelper:
 
@@ -93,20 +92,18 @@ class ImageHelper:
 
     def create_aligned_images(
         self, filename: str, detector: BaseDetectorModel, images: list
-    ) -> tuple[np.typing.NDArray[np.uint8], list, list[str]]:
-        img, faces = self.__extract_faces(filename, detector)
-        errors = []
+    ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
+        img, faces =  self.__extract_faces(filename, detector)
         if not faces:
             print("No faces detected.")  # Debug log
-            errors.append("No faces detected in one or both images.")
-            return img, None, errors
+            return FaceExtractionError(detector_name=detector.name,reason="No Faces Detected!")
 
         for i in range(len(faces)):
             aligned_filename = self.__align_single_image(
                 faces[i], i, filename, img, detector.name
             )
             images.append(aligned_filename)
-        return img, faces, errors
+        return img, faces
 
     def __load_image(self, filename: str, model: BaseDetectorModel):
         if filename.startswith("aligned_") or filename.startswith("detected_"):
@@ -139,14 +136,13 @@ class ImageHelper:
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
         save=True,
-    ):
+    ) -> FaceEmbeddingError|tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding] ]:
         errors = []
         embeddings = []
         if detector:
             img, faces = self.__extract_faces(filename, detector)
             return self.generate_all_emb(img, faces, filename, detector, embedder, save)
-        else:
-            errors.append("Error: detector model not initialized.")
+        errors.append("Error: detector model not initialized.")
         return embeddings, errors
    
     def generate_all_emb(
@@ -157,26 +153,24 @@ class ImageHelper:
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
         gender_age:BaseGenderAgeModel=None
-    ) -> tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding], list[str]]:
-        errors = []
+    ) -> FaceEmbeddingError|tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding]]:
         if not faces:
-            print("No faces detected.")  # Debug log
-            errors.append("No faces detected in one or both images.")
-            return img, None, errors
+            return FaceEmbeddingError(reason="Faces not exctracted",embedder_name=embedder.name)
         faces=faces.copy();
         aligned_images = []
         embeddings = []
 
         for i in range(len(faces)):
-            embedding = embedder.embed(img, faces[i])
-            embedding=np.array(embedding)
-            norm = np.linalg.norm(embedding)
-            embedding=embedding/norm;
-            embeddings.append(embedding)
-            aligned_filename = f"aligned_{i}_{filename}"
+            try:
+                embedding = embedder.embed(img, faces[i])
+                norm = np.linalg.norm(embedding)
+                embedding=embedding/norm;
+                embeddings.append(embedding)
+                aligned_filename = f"aligned_{i}_{filename}"
 
-            aligned_images.append(aligned_filename)
-            # face_count += 1
+                aligned_images.append(aligned_filename)
+            except Exception as ex:
+                return FaceEmbeddingError(embedder_name=embedder.name)
 
         # internal dedup code
 
@@ -209,12 +203,7 @@ class ImageHelper:
         face_embeddings=[]
         for i in range(len(filtered_faces)):
             bbox=[int(coord) for coord in filtered_faces[i]['bbox']]
-            # xmin,ymin,xmax,ymax - getting ROI
-            x_min, y_min, x_max, y_max = bbox
-            roi = img[y_min:y_max, x_min:x_max]
-            roi_bytes = roi.tobytes()
-            md5_hash = hashlib.md5(roi_bytes).hexdigest()
-            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i],md5_hash)
+            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i])
             if(gender_age):
                 f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);          
             face_embeddings.append(f);
@@ -229,7 +218,7 @@ class ImageHelper:
 
         
         # self.emb_manager.set_face_count(filename,len(filtered_faces),detector_name=model.name)
-        return img, face_embeddings,filtered_faces, errors
+        return img, face_embeddings,filtered_faces
 
     @staticmethod
     def points(numpoints, max_val, template_path, image_path):
@@ -335,33 +324,30 @@ class ImageHelper:
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
         save=True,
-    ) -> np.ndarray[np.float32]:
-        errors = []
+    ) -> np.ndarray[np.float32]|FaceExtractionError| FaceEmbeddingError:
         embedding = None
-        if embedder and detector:
-            img, faces = self.__extract_faces(filename, detector)
-            if faces:
-                if selected_face == -2 or len(faces) == 1:
-                    i = 0
-                else:
-                    i = selected_face
-                embedding = embedder.embed(img, faces[i])
-                if save:
-                    box = faces[i]["bbox"].astype(int).tolist()
-                    self.emb_manager.add_embedding(
-                        embedding,
-                        f"aligned_{i}_{filename}",
-                        box,
-                        detector.name,
-                        embedder.name,
-                    )
-
-            else:
-                print("No faces detected.")  # Debug log
-                errors.append("No faces detected in one or both images.")
+        img, faces = self.__extract_faces(filename, detector)
+        if not faces:
+            return FaceExtractionError(detector.name,reason="Failed to extract faces");
+        if selected_face == -2 or len(faces) == 1:
+            i = 0
         else:
-            errors.append("Error: Embedder model not initialized.")
-        return embedding, errors
+            i = selected_face
+
+        embedding = embedder.embed(img, faces[i])
+        if embedding is None or len(embedding)==0:
+            return FaceEmbeddingError(embedder.name)
+        if save:
+            box = faces[i]["bbox"].astype(int).tolist()
+            self.emb_manager.add_embedding(
+                embedding,
+                f"aligned_{i}_{filename}",
+                box,
+                detector.name,
+                embedder.name,
+            )
+            
+        return embedding
 
     def get_similar_images(
         self,
@@ -459,10 +445,8 @@ class ImageHelper:
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
         k=1,
-    ) -> tuple[list[SimilarImage], list[str]]:
-        errors = []
+    ) -> FaceEmbeddingError|FaceExtractionError|tuple[list[SimilarImage]]:
         similar_images = []
-        temp_err = []
         aligned_filename = (
             f"aligned_{0 if selected_face == -2 else selected_face}_{filename}"
         )
@@ -471,13 +455,21 @@ class ImageHelper:
             aligned_filename, detector_name=detector.name, embedder_name=embedder.name
         )
         if(embedding is None):
-            img, faces, temp_err = self.create_aligned_images(
+
+            det_result = self.create_aligned_images(
                 filename, detector, []
             )
-
-            _, new_embs, _ = self.generate_all_emb(
+            if(isinstance(det_result,BaseError)):
+                return det_result;
+            
+            img, faces =det_result
+            result = self.generate_all_emb(
                 img, faces, filename, detector, embedder
             )
+            if(isinstance(result,BaseError)):
+                return result;
+        
+            _, new_embs =result
             self.emb_manager.add_embedding_typed(
                     new_embs, detector.name, embedder.name
                 )
@@ -487,40 +479,35 @@ class ImageHelper:
         if len(embedding.embedding) > 0:
             user_embedding = embedding.embedding
         else:
-            user_embedding, temp_err = self.generate_embedding(
+            user_embedding = self.generate_embedding(
                 filename, selected_face, detector, embedder
             )
-            errors = errors + temp_err
-        if len(errors) == 0:
-            start = time.time()
+            if(isinstance(user_embedding,BaseError)):
+                return user_embedding;
+        start = time.time()
 
-        
-            valid = self.get_similar_images(
-                user_embedding,
-                filename=filename,
-                detector_name=detector.name,
-                embedder_name=embedder.name,
-                k=k,
-            )
-            end = time.time()
-            print(f"Elapsed Similar Images Time: {(end - start)*1000}ms")
-            for image in valid:
-                try:
-                    if image["similarity"]>threshold:
-                        match = image["name"]
-                        _, facenum, filename = match.split("_", 2)
-                        similar_model = SimilarImage(filename, int(facenum), image["similarity"])
-                        similar_images.append(similar_model)
-                except Exception as e:
-                    # template_matching
-                    print(f"failed to match image {match} because:\n{e}")
-            if len(valid) == 0:
-                errors.append("No unique matching faces found!")
-            elif len(similar_images) == 0:
-                errors.append(f"No matching faces found with sufficient similarity")
+    
+        valid = self.get_similar_images(
+            user_embedding,
+            filename=filename,
+            detector_name=detector.name,
+            embedder_name=embedder.name,
+            k=k,
+        )
+        end = time.time()
+        print(f"Elapsed Similar Images Time: {(end - start)*1000}ms")
+        for image in valid:
+            try:
+                if image["similarity"]>threshold:
+                    match = image["name"]
+                    _, facenum, filename = match.split("_", 2)
+                    similar_model = SimilarImage(image_name=filename,face_num=int(facenum),similarity=image["similarity"])
+                    similar_images.append(similar_model)
+            except Exception as e:
+                # template_matching
+                return BaseError(reason=f"failed to match image {match} because:\n{e}")
 
-        errors = errors + temp_err
-        return similar_images, errors
+        return similar_images
 
     #function that returns the most similiar image to the selected template, accorfing to the selected thr and sift points
     def get_most_similar_image_by_template(self, filename,similarity_thresh):
@@ -624,7 +611,7 @@ class ImageHelper:
         unique_values = np.unique(labels)
         index_groups = {value: np.where(labels == value)[0] for value in unique_values}
         value_groups = {
-            int(key): [
+            str(key): [
                 face_embeddings[index].name
                 for index in indices
             ]

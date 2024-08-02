@@ -7,7 +7,11 @@ from typing import Union,List
 sys.path.append(os.path.abspath('..'))
 from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
 from ..models.model_loader import ModelLoader
+from models.face_info import FaceInfo
 import math
+from models.detector_name import DetectorName
+from models.embedder_name import EmbedderName
+
 from ..util import norm_path
 
 class InMemoryImageEmbeddingManager:
@@ -17,20 +21,25 @@ class InMemoryImageEmbeddingManager:
         for detector_name,_ in ModelLoader.detectors.items():
             PKL_PATH=os.path.join(root_path,"static",detector_name,"embeddings.pkl");
             self.db_embeddings[detector_name]= StoredDetectorEmbeddings({},pkl_path=PKL_PATH)
-
-    def get_image_boxes(self,filename:str,detector_name:str,embedder_name:str):
-        boxes=[e.box for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
-        return boxes;
+    
+    def get_image_faces(self,filename:str,face_num:int,detector_name:str,embedder_name:str)->list[FaceInfo]:
+        if(face_num==-2):
+            faces=[FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality) for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
+        else:
+            for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings:
+                if e.name.split('_',2)[-1]==filename and face_num==int(e.name.split('_',2)[-2]):
+                    return [FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality)]
+        return faces;
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
         embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         return embeddings;
-    def get_all_embeddings(self,detector_name:str,embedder_name:str,dedup=True)->list[FaceEmbedding]:
+    def get_all_embeddings(self,detector_name:str,embedder_name:str,dedup=True,quality_thresh:float=0)->list[FaceEmbedding]:
         embeddings = [
             e
             for e in self.db_embeddings[detector_name]
             .embeddings[embedder_name]
             .embeddings
-            if not dedup or e.is_dup == False
+            if e.quality>=quality_thresh and (not dedup or e.is_dup == False)
         ]
         return embeddings
     
@@ -75,7 +84,7 @@ class InMemoryImageEmbeddingManager:
         data.index = faiss.IndexHNSWFlat( d,M);
         data.index.add(embeddings);
     
-    def search(self,q_embeddings:np.ndarray[np.float32],k:int,detector_name:str,embedder_name:str):
+    def search(self,q_embeddings:np.ndarray[np.float32],k:int,detector_name:DetectorName,embedder_name:EmbedderName,quality:float=0)->list:
         data=self.db_embeddings[detector_name].embeddings[embedder_name];
         if(len(data.embeddings)==0):
             return []
@@ -85,8 +94,22 @@ class InMemoryImageEmbeddingManager:
             # Define the number of subquantizers (m) and number of bits per subquantizer (nbits)
             self.train_IVFPQ_index(data);
         else:
-            data.index = faiss.IndexFlatIP(512);
-            data.index.add(np.vstack([e.embedding for e in data.embeddings]))
+            ids=[]
+            index = faiss.IndexFlatIP(512);
+            if(quality>0):
+                data.index=faiss.IndexIDMap2(index);
+                filtered=[]
+                for i in range(len(data.embeddings)):
+                    if(data.embeddings[i].quality>quality):
+                        ids.append(i)
+                        filtered.append(data.embeddings[i].embedding)
+                if len(filtered)==0:
+                    return [filtered];
+                data.index.add_with_ids(np.vstack(filtered),ids)
+            else:
+                data.index = faiss.IndexFlatIP(512);
+                data.index.add(np.vstack([e.embedding for e in data.embeddings]))
+
         results=self.find_closest_vector(data,q_embeddings,k);
         return results;
          

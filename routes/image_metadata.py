@@ -11,29 +11,28 @@ image_metadata_router=APIRouter()
 @image_metadata_router.post("/api/find")
 def find_face_in_image(request:GetImageMetadataRequest):
     helper=resources.helper
-    
+    face_num=request.selected_face
     filename = request.image
     detector_name = request.detector_name
     embedder_name = request.embedder_name
 
-    faces_length = [0]
-    messages = []
+    faces_length = 0
     errors = []
-    boxes = []
-    if "aligned" in filename or "detected" in filename:
-        path = os.path.join(AppPaths.STATIC_FOLDER, filename)
-    else:
+    faces=[]
+    if face_num==-2:
         path = os.path.join(AppPaths.UPLOAD_FOLDER, filename)
+    else:
+        path = os.path.join(AppPaths.STATIC_FOLDER,request.detector_name.value, f"aligned_{face_num}_{filename}")
+
     if os.path.exists(path):
-        boxes = helper.get_face_boxes(
-            filename, detector_name=detector_name, embedder_name=embedder_name
+        faces = helper.get_image_faces(
+            filename, face_num,detector_name=detector_name, embedder_name=embedder_name
         )
-        faces_length = len(boxes)
-        messages.append(f"{faces_length} detected faces in {filename}.")
+        faces_length = len(faces)
     else:
         errors.append(f"File {filename} does not exist!")
     
-    return FindFaceResponse(boxes=boxes,faces_length=faces_length,errors=errors)
+    return FindFaceResponse(faces=faces,faces_length=faces_length,errors=errors)
 
 
 

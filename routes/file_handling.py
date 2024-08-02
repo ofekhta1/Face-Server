@@ -37,16 +37,16 @@ async def upload_image(
     )->UploadImagesResponse:
     helper=resources.helper
     manager=resources.manager
-
+    gender_age_model=ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA");
     errors:list = []
     current_images = []
     faces_length = []
     detector_indices: list[dict[str, list[int]]] = []
     valid_images = []
     generated_embeddings: list[dict[str, list[np.ndarray]]] = {}
-    # get request parameters
+    # get request parameters    gender_age_model = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
 
-    gender_age_model = ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA")
+
     # true if images will be saved without containing faces
     i = -1
     invalid_images = []
@@ -154,3 +154,10 @@ async def upload_image(
                                 faces_length=faces_length,errors=errors);
 
 
+@file_handling_router.get("/api/gallery")
+def get_gallery(embedder_name:EmbedderName,detector_name:DetectorName)->list[str]:
+    manager=resources.manager
+
+    embeddings=manager.get_all_embeddings(detector_name,embedder_name,False)
+    result= [e.name for e in embeddings]
+    return result

@@ -1,8 +1,10 @@
 import os
 import numpy as np
 import sys
+from itertools import chain
 sys.path.append(os.path.abspath('..'))
-from models.stored_embedding import StoredDetectorEmbeddings,FaceEmbedding,StoredEmbeddings
+from models.stored_embedding import FaceEmbedding
+from models.face_info import FaceInfo
 from ..models.model_loader import ModelLoader
 from pymilvus import MilvusClient,DataType
 from typing import Union,List
@@ -24,8 +26,10 @@ class MilvusImageEmbeddingManager:
                     schema.add_field(field_name="Id", datatype=DataType.INT64, is_primary=True)
                     schema.add_field(field_name="Embedding", datatype=DataType.FLOAT_VECTOR, dim=512)
                     schema.add_field(field_name="Box", datatype=DataType.ARRAY, element_type=DataType.INT32, max_capacity=4)
+                    schema.add_field(field_name="Landmarks", datatype=DataType.ARRAY, element_type=DataType.FLOAT, max_capacity=10)
                     schema.add_field(field_name="FileName", datatype=DataType.VARCHAR,max_length=128)
                     schema.add_field(field_name="FaceNum", datatype=DataType.INT16)
+                    schema.add_field(field_name="Quality", datatype=DataType.FLOAT)
                     schema.add_field(field_name="Age", datatype=DataType.INT16)
                     schema.add_field(field_name="Gender", datatype=DataType.VARCHAR,max_length=5)
                     index_params = self.client.prepare_index_params()
@@ -49,30 +53,43 @@ class MilvusImageEmbeddingManager:
     def get_collection_name(self,detector_name,embedder_name):
         return f"{detector_name}_{embedder_name}";
 
-    def get_image_boxes(self,filename:str,detector_name:str,embedder_name:str):
+    def get_image_faces(self,filename:str,face_num:int,detector_name:str,embedder_name:str)->list[FaceInfo]:
         collection_name=self.get_collection_name(detector_name,embedder_name)
-        results=self.client.query(collection_name,f"FileName=='{filename}'",output_fields=["Box"])
-        # boxes=[e.box for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
-        return [result['Box'] for result in results] #convert to array
+        if face_num==-2:
+            query=f"FileName=='{filename}'"
+        else:
+            query=f"FileName=='{filename}' && FaceNum=='{face_num}'"
+        results=self.client.query(collection_name,query,output_fields=["Box","Landmarks","Quality"])
+        landmarks=[]
+        found=[]
+        for result in results:
+            landmarks = [[result["Landmarks"][j], result["Landmarks"][j + 1]] for j in range(0, len(result["Landmarks"]), 2)]
+            box=result["Box"]
+            quality=result["Quality"]
+            found.append(FaceInfo(bbox=box,landmarks=landmarks,quality=quality))
+        return found 
 
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
         collection_name=self.get_collection_name(detector_name,embedder_name)
         results=self.client.query(collection_name,f"FileName=='{filename}'",output_fields=["Embedding"])
         embeddings=[r['Embedding'] for r in results]
         return embeddings;#convert to array
-    def get_all_embeddings(self,detector_name:str,embedder_name:str):
+    def get_all_embeddings(self,detector_name:str,embedder_name:str,quality_thresh=0):
         collection_name=self.get_collection_name(detector_name,embedder_name)
-        results=self.client.query(collection_name,f"Id > 0",output_fields=["Embedding","FileName","FaceNum","Box"])
+        results=self.client.query(collection_name,f"Quality>={quality_thresh}",output_fields=["Embedding","FileName","FaceNum","Quality","Box"])
         return [self.__build_face_embedding(r) for r in results];
     def __generate_data_from_face_embedding(self,embedding:FaceEmbedding):
         parts=embedding.name.split('_',2);
         filename=parts[-1];
         face_num=int(parts[-2])
+        landmarks=list(chain.from_iterable(embedding.landmarks))
         data={
             "Embedding":embedding.embedding,
             "FileName":filename,
             "FaceNum":face_num,
             "Box":embedding.box,
+            "Landmarks":landmarks,
+            "Quality":embedding.quality,
             "Age":embedding.age,
             "Gender":embedding.gender
         }
@@ -120,7 +137,13 @@ class MilvusImageEmbeddingManager:
         name=f"aligned_{data['FaceNum']}_{data['FileName']}"
         box=data["Box"] if "Box" in data else [];
         embedding=data["Embedding"];
-        return FaceEmbedding(name,box,embedding);
+        quality=data["Quality"] if "Quality" in data else 1;
+        age=data["Age"] if "Age" in data else -1;
+        gender=data["Gender"] if "Gender" in data else "";
+        landmarks=[]
+        if "Landmarks" in data:
+            landmarks = [(data["Landmarks"][i], data["Landmarks"][i + 1]) for i in range(0, len(data["Landmarks"]), 2)]
+        return FaceEmbedding(name,box,embedding,quality=quality,landmarks=landmarks,gender=gender,age=age);
 
     def get_index_by_name(self,name:str,detector_name:str,embedder_name:str)->int:
         parts=name.split('_',2);
@@ -136,18 +159,19 @@ class MilvusImageEmbeddingManager:
         filename=parts[-1];
         face_num=parts[-2];
         collection_name=self.get_collection_name(detector_name,embedder_name)
-        result=self.client.query(collection_name,filter=f"FileName=='{filename}' && FaceNum=={face_num}",output_fields=["Id","Embedding","Box","FileName","FaceNum"]);
+        result=self.client.query(collection_name,filter=f"FileName=='{filename}' && FaceNum=={face_num}",output_fields=["Id","Embedding","Box","Quality","FileName","FaceNum"]);
         if(len(result)>0):
             return self.__build_face_embedding(result[0])
         return None;
 
-    def search(self,embedding:np.ndarray[np.float32],k:int,detector_name:str,embedder_name:str):
+    def search(self,embedding:np.ndarray[np.float32],k:int,detector_name:str,embedder_name:str,quality:float=0):
         collection_name=self.get_collection_name(detector_name,embedder_name)
         results = self.client.search(
             collection_name=collection_name,
             data=embedding,
-            output_fields=["Embedding","FileName","FaceNum"],
+            output_fields=["Embedding","FileName","FaceNum","Quality"],
             limit=k, # Max. number of search results to return
+            filter=f"Quality >= {quality}",
             search_params={"metric_type": "IP", "params": {}} # Search parameters
         )
         

@@ -2,6 +2,7 @@ from modules import AppPaths,ModelLoader,util,FamilyClassifier
 from models.requests import CompareFacesRequest,CompareKinshipRequest,SearchSimilarRequest,SearchMostSimilarRequest
 from models.responses import CompareFacesResponse,CompareKinshipResponse,SearchSimilarResponse,SearchMostSimilarResponse,NoMatchResponse
 from . import resources 
+from models.embedder_name import EmbedderName
 import numpy as np
 from models.stored_embedding import FaceEmbedding
 from sklearn.metrics.pairwise import cosine_similarity
@@ -90,13 +91,16 @@ def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
     embedder_name = request.embedder_name
     kinship_embedder_name = request.kinship_embedder_name
     similarity_thresh = request.similarity_threshold
-    
+    quality_thresh = request.quality_threshold
+    if(not EmbedderName.is_kinship(kinship_embedder_name)):
+        raise HTTPException(400,jsonable_encoder(BaseError(reason=f"{kinship_embedder_name} is not a valid kinship embedder name")))
+
     embedder = ModelLoader.load_embedder(embedder_name)
     detector = ModelLoader.load_detector(detector_name)
-    uploaded_images = request.form.getlist("images")
+    uploaded_images = request.images
     # helper.cluster_family_images(model_name,APP_DIR,uploaded_images,model)
     image_count= len(uploaded_images)
-    combochanges = [int(x) for x in request.form.getlist("selected_faces")]
+    combochanges = request.selected_faces
     embeddings:list[list[FaceEmbedding]] = [[] for _ in range(image_count)]
 
     # check if the user uploaded 2 face images
@@ -110,27 +114,36 @@ def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
                 aligned_filename, detector_name, embedder_name
             )
             if(existing_embedding is None):
-                img, faces, temp_err = helper.create_aligned_images(
+                det_result = helper.create_aligned_images(
                     uploaded_images[i], detector, []
                 )
-                if img is not None:
-                    _, new_embs, _ = helper.generate_all_emb(
-                        img, faces, uploaded_images[i], detector, embedder
+                if(isinstance(det_result,BaseError)):
+                    raise HTTPException(500,jsonable_encoder(det_result));
+                
+                img, faces = det_result
+                result = helper.generate_all_emb(
+                    img, faces, uploaded_images[i], detector, embedder
+                )
+                if(isinstance(result,BaseError)):
+                    raise HTTPException(500,jsonable_encoder(result));
+
+                _, new_embs =result
+                manager.add_embedding_typed(
+                        new_embs, detector_name, embedder_name
                     )
-                    manager.add_embedding_typed(
-                            new_embs, detector_name, embedder_name
-                        )
-                    embedding=new_embs[face_num]
+                embedding=new_embs[face_num]
             else:
                 embedding=existing_embedding
 
-            similar_images=helper.get_similar_images(embedding.embedding,aligned_filename,detector_name,embedder_name,20);
+            similar_images=helper.get_similar_images(embedding.embedding,aligned_filename,detector_name,embedder_name,100,quality_thresh);
             for image in similar_images:
                 if image["similarity"]>=similarity_thresh:
                     #same person
-                    kinship_embedding=helper.emb_manager.get_embedding_by_name(image["Embedding"].name,detector_name,kinship_embedder_name)
-                    embeddings[i].append(kinship_embedding)
-            embeddings[i].append(helper.emb_manager.get_embedding_by_name(embedding.name,detector_name,kinship_embedder_name));
+                    embedding_get_result=helper.emb_manager.get_embedding_by_name(image["Embedding"].name,detector_name,kinship_embedder_name)
+                    if(embedding_get_result is not None):
+                        kinship_embedding=embedding_get_result.embedding
+                        embeddings[i].append(kinship_embedding)
+            embeddings[i].append(helper.emb_manager.get_embedding_by_name(embedding.name,detector_name,kinship_embedder_name).embedding);
 
         kinship_similarity_matrix=cosine_similarity(embeddings[0],embeddings[1])
         average_similarity = np.mean(kinship_similarity_matrix)
@@ -142,19 +155,18 @@ def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
 @image_search_router.post("/api/check_many")
 def find_similar_images(request:SearchSimilarRequest)->SearchSimilarResponse:
     helper=resources.helper
-    errors = []
-    messages = []
     detector_name = request.detector_name
     embedder_name = request.embedder_name
     embedder = ModelLoader.load_embedder(embedder_name)
     detector = ModelLoader.load_detector(detector_name)
-    similarity_thresh = request.similarity_thresh
+    similarity_thresh = request.similarity_threshold
+    quality_thresh = request.quality_threshold
     current_image = request.image
     selected_face = request.selected_face
     k = request.number_of_images
 
     similar = helper.get_k_similar_images(
-        current_image, selected_face, similarity_thresh, detector, embedder, k
+        current_image, selected_face, similarity_thresh, detector, embedder, k,quality_thresh
     )
     if isinstance(similar,BaseError):
         return SearchSimilarResponse(images=[],errors=similar) 
@@ -171,6 +183,7 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
     base_embedder = ModelLoader.load_embedder(base_embedder_name)
     base_detector = ModelLoader.load_detector(base_detector_name)
     similarity_thresh = request.similarity_threshold
+    quality_thresh = request.quality_threshold
     current_image = request.image
     selected_face = request.selected_face
 
@@ -188,6 +201,7 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
             detector=base_detector,
             embedder=base_embedder,
             k=5,
+            quality_thresh=quality_thresh
         )
         if isinstance(similar_images,BaseError):
             raise HTTPException(500,detail=jsonable_encoder(similar_images))
@@ -197,8 +211,8 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
     if most_similar_image:
 
         face_length = len(
-            helper.get_face_boxes(
-                most_similar_image.image_name, base_detector_name, base_embedder_name
+            helper.get_image_faces(
+                most_similar_image.image_name,-2, base_detector_name, base_embedder_name
             )
         )
         image_name = most_similar_image.image_name

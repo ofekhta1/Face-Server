@@ -1,6 +1,8 @@
 import numpy as np
 import os
 from sklearn.metrics.pairwise import cosine_similarity
+from insightface.utils.face_align import estimate_norm
+
 def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_detector:str):
     detector_indices:dict[str,list[int]]={}
     base_detector_embs=[]
@@ -66,6 +68,20 @@ def norm_path(path):
     if os.name == 'nt':  # Windows
         return path.replace('/', '\\')
     else:  # Linux, macOS, etc.
-        return path.replace('\\', '/')        
+        return path.replace('\\', '/')       
 
+def transform_norm_landmarks(landmarks:np.ndarray):
+    
+    M=estimate_norm(lmk=landmarks,image_size=112);
+    landmarks_homo = np.hstack([landmarks, np.ones((landmarks.shape[0], 1))])  # Convert to homogeneous coordinates
+    transformed_landmarks:np.ndarray = np.dot(M, landmarks_homo.T).T
+    return transformed_landmarks.tolist()
 
+def calculate_quality(img:np.ndarray,face:dict)->float:
+    bbox=face["bbox"]
+    width=bbox[2]-bbox[0]
+    height=bbox[3]-bbox[1]
+    face_area=width*height
+    img_area=img.shape[0]*img.shape[1]
+    face_ratio=face_area/img_area
+    return face_ratio;

@@ -3,23 +3,16 @@ import numpy as np
 from typing import Union,List
 
 class FaceEmbedding:
-    def __init__(self,name:str,box:list[int],embedding:np.ndarray,gender:str="",age:int=-1):
+    def __init__(self,name:str,box:list[int],embedding:np.ndarray,quality:float=1,landmarks:list[list[float]]=[],gender:str="",age:int=-1):
         self.name=name
         self.box=box#[x1,y1,x2,y2]
+        self.landmarks=landmarks#[[x1,y1],[x2,y2]...]
         self.embedding=embedding
         self.gender=gender
         self.age=age
+        self.quality=quality
         self.is_dup=False
 
-    def to_json(self):
-        return {
-            "embedding_name": self.name,
-            "bbox": self.box,
-            "gender":self.gender,
-            "age":self.age
-        }
-
-        
 
 class StoredEmbeddings:
     def __init__(self,embeddings:list[FaceEmbedding],index:IndexIVFPQ | IndexHNSWFlat | IndexFlatIP=None):
@@ -65,6 +58,10 @@ class StoredDetectorEmbeddings:
             emb.gender=kwargs["gender"]
         if("age" in kwargs):
             emb.age=kwargs["age"]
+        if("landmarks" in kwargs):
+            emb.landmarks=kwargs["landmarks"]
+        if("quality" in kwargs):
+            emb.quality=kwargs["quality"]
         self.add_embedding_typed(model_name,emb);
 
 

@@ -3,10 +3,13 @@ from insightface.utils.face_align import norm_crop
 import os
 from models.errors import FaceExtractionError,FaceEmbeddingError
 from .stores import in_memory_image_embedding_manager,image_group_repository
-from modules.models import ModelLoader
 from models.errors.base_error import BaseError
 from models.stored_embedding import FaceEmbedding
 from models.similar_image import SimilarImage
+from models.face_info import FaceInfo
+from models.detector_name import DetectorName
+from models.embedder_name import EmbedderName
+
 from . import util;
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
@@ -56,9 +59,13 @@ class ImageHelper:
         cv2.imwrite(aligned_path, aligned_img)
         return aligned_filename
 
-    def get_face_boxes(self, filename: str, detector_name: str,embedder_name:str) -> list[list[int]]:
-        boxes = self.emb_manager.get_image_boxes(filename, detector_name,embedder_name=embedder_name)
-        return boxes
+    def get_image_faces(self, filename: str,face_num:int, detector_name: str,embedder_name:str) -> list[FaceInfo]:
+        faces = self.emb_manager.get_image_faces(filename,face_num, detector_name,embedder_name=embedder_name)
+        if face_num!=-2:
+            # convert landmarks to cropped landmarks
+            faces[0].landmarks=util.transform_norm_landmarks(np.array(faces[0].landmarks))
+
+        return faces
 
     def detect_faces_in_image(
         self, filename: str, model: BaseDetectorModel, images: list
@@ -98,12 +105,26 @@ class ImageHelper:
             print("No faces detected.")  # Debug log
             return FaceExtractionError(detector_name=detector.name,reason="No Faces Detected!")
 
+        
         for i in range(len(faces)):
             aligned_filename = self.__align_single_image(
-                faces[i], i, filename, img, detector.name
-            )
+                    faces[i], i, filename, img, detector.name
+                )  
             images.append(aligned_filename)
+        #its bad code cause it iterates over the list of faces 3 times...
+
         return img, faces
+    def add_quality_to_faces(self,img:np.ndarray,faces:list[dict]):
+        faces_copy=faces.copy()
+        for i in range(len(faces_copy)):
+            quality=util.calculate_quality(img,faces_copy[i])
+            faces_copy[i]["quality"]=quality;
+        # aligned_0 = best quality 
+        faces_copy.sort(key=lambda x: x["quality"],reverse=True)
+     
+        return faces_copy;
+ 
+
 
     def __load_image(self, filename: str, model: BaseDetectorModel):
         if filename.startswith("aligned_") or filename.startswith("detected_"):
@@ -114,7 +135,9 @@ class ImageHelper:
         return img       
     def __extract_faces(self, filename: str, model: BaseDetectorModel):
         img =self.__load_image(filename,model)
-        return img, model.extract_faces(img)
+        faces= model.extract_faces(img)
+        faces=self.add_quality_to_faces(img,faces);
+        return img,faces;
        
 
     @staticmethod
@@ -203,7 +226,9 @@ class ImageHelper:
         face_embeddings=[]
         for i in range(len(filtered_faces)):
             bbox=[int(coord) for coord in filtered_faces[i]['bbox']]
-            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i])
+            landmarks=[(x[0],x[1]) for x in filtered_faces[i]["kps"]]
+            quality=filtered_faces[i]["quality"] if "quality" in filtered_faces[i] else 1
+            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i],quality=quality,landmarks=landmarks)
             if(gender_age):
                 f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);          
             face_embeddings.append(f);
@@ -353,15 +378,16 @@ class ImageHelper:
         self,
         user_embedding: list,
         filename: str,
-        detector_name: str,
-        embedder_name: str,
+        detector_name: DetectorName,
+        embedder_name: EmbedderName,
         k=5,
+        quality_thresh:float=0
     ):
         np_emb = np.array(user_embedding).astype("float32").reshape(1, -1)
 
         start = time.time()
 
-        result = self.emb_manager.search(np_emb, k + 1, detector_name, embedder_name)
+        result = self.emb_manager.search(np_emb, k + 1, detector_name, embedder_name,quality_thresh)
         end = time.time()
         print(f"Elapsed Search Time: {(end - start)*1000} ms")
         filtered = []
@@ -441,10 +467,11 @@ class ImageHelper:
         self,
         filename: str,
         selected_face: int,
-        threshold: float,
+        similarity_threshold: float,
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
         k=1,
+        quality_thresh:float=0,
     ) -> FaceEmbeddingError|FaceExtractionError|tuple[list[SimilarImage]]:
         similar_images = []
         aligned_filename = (
@@ -469,14 +496,14 @@ class ImageHelper:
             if(isinstance(result,BaseError)):
                 return result;
         
-            _, new_embs =result
+            _, new_embs ,_=result
             self.emb_manager.add_embedding_typed(
                     new_embs, detector.name, embedder.name
                 )
             embedding = next((x for x in new_embs if x.name==aligned_filename), None)
         end = time.time()
         print(f"Elapsed Get Embedding Time: {(end - start)*1000}ms")
-        if len(embedding.embedding) > 0:
+        if embedding and len(embedding.embedding) > 0:
             user_embedding = embedding.embedding
         else:
             user_embedding = self.generate_embedding(
@@ -493,12 +520,13 @@ class ImageHelper:
             detector_name=detector.name,
             embedder_name=embedder.name,
             k=k,
+            quality_thresh=quality_thresh
         )
         end = time.time()
         print(f"Elapsed Similar Images Time: {(end - start)*1000}ms")
         for image in valid:
             try:
-                if image["similarity"]>threshold:
+                if image["similarity"]>similarity_threshold:
                     match = image["name"]
                     _, facenum, filename = match.split("_", 2)
                     similar_model = SimilarImage(image_name=filename,face_num=int(facenum),similarity=image["similarity"])
@@ -594,10 +622,10 @@ class ImageHelper:
         
 
     def cluster_images(
-        self, max_distance, min_samples, detector_name, embedder_name
+        self, max_distance:float, min_samples:int, detector_name:DetectorName, embedder_name:EmbedderName,quality_thresh:float=0
     ) -> dict[int, list[str]]:
         # Assuming 'embeddings' is a list of your 512-dimensional embeddings
-        face_embeddings =self.emb_manager.get_all_embeddings(detector_name,embedder_name)
+        face_embeddings =self.emb_manager.get_all_embeddings(detector_name,embedder_name,quality_thresh=quality_thresh)
         embeddings=[e.embedding for e in face_embeddings]
         if len(embeddings) == 0:
             return {}

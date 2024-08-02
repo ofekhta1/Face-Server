@@ -1,11 +1,11 @@
 
-from typing import Annotated,Optional,List,Dict
+from typing import Annotated,Optional,List,Tuple
 from fastapi import Form
 from .base_response import BaseResponse
-from models.similar_image import SimilarImage
+from models.face_info import FaceInfo
 
 class FindFaceResponse(BaseResponse):
-    boxes:List[List[int]]
+    faces:List[FaceInfo]
     faces_length:int
 
 class GetDetectorIndicesResponse(BaseResponse):

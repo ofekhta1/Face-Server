@@ -14,6 +14,10 @@ from middlewares import register_middlewares
 app=FastAPI();
 origins = [
     "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "https://127.0.0.1:7101",
+    "https://localhost:7101",
+    "http://localhost:5156",
 ]
 
 app.add_middleware(
@@ -43,13 +47,6 @@ def delete_embeddings():
 
 
 
-@app.get("/api/gallery")
-def get_gallery(embedder_name:EmbedderName,detector_name:DetectorName)->list[str]:
-    manager=resources.manager
-
-    embeddings=manager.get_all_embeddings(detector_name,embedder_name,False)
-    result= [e.name for e in embeddings]
-    return result
 
 
 resources.init_resources();

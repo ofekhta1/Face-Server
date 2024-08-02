@@ -7,3 +7,5 @@ from .filter_request import FilterRequest
 from .get_image_metadata_request import GetImageMetadataRequest
 from .get_clusters_request import GetClustersRequest
 from .process_images_request import ProcessImagesRequest
+from .change_group_name_request import ChangeGroupNameRequest
+from .compare_kinship_clusters_request import CompareKinshipClustersRequest

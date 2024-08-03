@@ -1,15 +1,22 @@
 from models.responses import UploadImagesResponse
-from modules import ModelLoader,ImageHelper,AppPaths,util
-from . import resources
+from services import ModelLoader,util
+from services.processing.local.image_loader import ImageLoader
+from config.app_paths import AppPaths
 import os
 from models.errors.base_error import BaseError
 import shutil
 import traceback
 import sys
 import numpy as np
-from fastapi import APIRouter,UploadFile,File,Body,HTTPException
+from fastapi import APIRouter,UploadFile,File,Body,HTTPException,Depends
+from routes.resources import Container
 from typing import Annotated,Optional,List
 from models import DetectorName,EmbedderName
+from dependency_injector.wiring import inject, Provide
+from services.processing import FaceAligner
+from services.processing.local import LocalEmbeddingGenerator
+from services.processing.triton import TritonEmbeddingGenerator
+from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
 
 # Define directories
 APP_DIR = os.path.dirname(sys.argv[0])
@@ -29,14 +36,19 @@ file_handling_router=APIRouter()
 
 
 @file_handling_router.post("/api/upload")
+@inject
 async def upload_image(
     files: Annotated[List[UploadFile], File()],
     return_detector: Annotated[DetectorName, Body(alias="detector_name")]= DetectorName.retinaface_antelope,
     return_embedder: Annotated[EmbedderName, Body(alias="embedder_name")]= EmbedderName.resnet100,
-    save_invalid: Annotated[Optional[bool], Body()]=False
+    save_invalid: Annotated[Optional[bool], Body()]=False,
+
+    face_aligner:FaceAligner=Depends(Provide[Container.face_aligner]),
+    embedding_generator:LocalEmbeddingGenerator|TritonEmbeddingGenerator=Depends(Provide[Container.embedding_generator]),
+    emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager])
+
     )->UploadImagesResponse:
-    helper=resources.helper
-    manager=resources.manager
+
     gender_age_model=ModelLoader.load_genderage("MobileNetCeleb0.25_CelebA");
     errors:list = []
     current_images = []
@@ -53,7 +65,7 @@ async def upload_image(
     for file in files:
         if file.filename:
             filename = file.filename.replace("_", "")
-            if ImageHelper.allowed_file(file.filename):
+            if ImageLoader.allowed_file(file.filename):
                 path = os.path.join(AppPaths.UPLOAD_FOLDER, file.filename)
                 try:
                     i += 1
@@ -71,7 +83,7 @@ async def upload_image(
                 # load model
                 for detector_name in ModelLoader.detectors:
                     detector = ModelLoader.load_detector(model_name=detector_name)
-                    det_result = helper.create_aligned_images(
+                    det_result = face_aligner.create_aligned_images(
                             file.filename, detector, [])
                     
                     if isinstance(det_result,BaseError):
@@ -86,7 +98,7 @@ async def upload_image(
                         # Create cropped images for all faces detected and store them in the respective model folder under static/{model}/
 
                         # Generate the embeddings for all faces and store them for future indexing
-                        result = helper.generate_all_emb(
+                        result = embedding_generator.generate_all_emb(
                             img,
                             faces,
                             file.filename,
@@ -102,7 +114,7 @@ async def upload_image(
                         detector_indices[i][return_detector] = list(
                             range(len(face_embeddings))
                         )
-                        manager.add_embedding_typed(
+                        emb_manager.add_embedding_typed(
                             face_embeddings, detector_name, embedder_name
                         )
 
@@ -141,7 +153,7 @@ async def upload_image(
                                 current_images.append(file.filename)
                                 valid_images.append(file.filename)
                         # save the current database state
-                    manager.save(detector_name)
+                    emb_manager.save(detector_name)
                 detector_indices[i] = util.get_all_detectors_faces(
                     generated_embeddings, return_detector
                 )
@@ -155,9 +167,10 @@ async def upload_image(
 
 
 @file_handling_router.get("/api/gallery")
-def get_gallery(embedder_name:EmbedderName,detector_name:DetectorName)->list[str]:
-    manager=resources.manager
+@inject
+def get_gallery(embedder_name:EmbedderName,detector_name:DetectorName,
+    emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]))->list[str]:
 
-    embeddings=manager.get_all_embeddings(detector_name,embedder_name,False)
+    embeddings=emb_manager.get_all_embeddings(detector_name,embedder_name,False)
     result= [e.name for e in embeddings]
     return result

@@ -1,4 +1,5 @@
-from modules import AppPaths,ModelLoader,util,FamilyClassifier
+from services import ModelLoader,util,FamilyClassifier
+from config.app_paths import AppPaths
 from models.requests import CompareFacesRequest,CompareKinshipRequest,SearchSimilarRequest,SearchMostSimilarRequest
 from models.responses import CompareFacesResponse,CompareKinshipResponse,SearchSimilarResponse,SearchMostSimilarResponse,NoMatchResponse
 from . import resources 
@@ -6,9 +7,15 @@ from models.embedder_name import EmbedderName
 import numpy as np
 from models.stored_embedding import FaceEmbedding
 from sklearn.metrics.pairwise import cosine_similarity
-from fastapi import APIRouter,HTTPException
+from routes.resources import Container
+from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager,MetadataManager
+from dependency_injector.wiring import inject, Provide
+from fastapi import APIRouter,HTTPException,Depends
 from models.errors.base_error import BaseError
 from fastapi.encoders import jsonable_encoder
+from services.processing import FaceAligner,FaceSimilaritySearch
+from services.processing.local import LocalEmbeddingGenerator
+from services.processing.triton import TritonEmbeddingGenerator
 
 
 image_search_router=APIRouter()
@@ -16,10 +23,12 @@ image_search_router=APIRouter()
 # compare two images and their selected faces based on their similarity
 # if above provided threshold return positive result
 @image_search_router.post("/api/compare")
-async def compare_image(request:CompareFacesRequest)->CompareFacesResponse:
-    helper=resources.helper
-    manager=resources.manager
-    
+@inject
+async def compare_image(request:CompareFacesRequest,
+                        face_aligner:FaceAligner=Depends(Provide[Container.face_aligner]),
+                        embedding_generator:LocalEmbeddingGenerator|TritonEmbeddingGenerator=Depends(Provide[Container.embedding_generator]),
+                        emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]))->CompareFacesResponse:
+
     
     uploaded_images = request.images
 
@@ -34,13 +43,13 @@ async def compare_image(request:CompareFacesRequest)->CompareFacesResponse:
         if len(uploaded_images) == 2 and len(combochanges)==2:
             filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
             # check if embedding of face already exists
-            embedding = manager.get_embedding_by_name(
+            embedding = emb_manager.get_embedding_by_name(
                 filename, request.detector_name, request.embedder_name
             )
             if embedding is not None and len(embedding.embedding)>0:
                 embeddings.append(embedding.embedding)
             else:
-                det_result = helper.create_aligned_images(
+                det_result = face_aligner.create_aligned_images(
                         uploaded_images[i], detector, [])
                 
                 if isinstance(det_result,BaseError):
@@ -48,7 +57,7 @@ async def compare_image(request:CompareFacesRequest)->CompareFacesResponse:
 
                 img, faces = det_result
                 
-                result= helper.generate_all_emb(
+                result= embedding_generator.generate_all_emb(
                     img, faces, uploaded_images[i], detector, embedder
                 )
 
@@ -58,7 +67,7 @@ async def compare_image(request:CompareFacesRequest)->CompareFacesResponse:
 
                 img, new_embs ,faces=result
                 
-                manager.add_embedding_typed(
+                emb_manager.add_embedding_typed(
                     new_embs, request.detector_name, request.embedder_name
                 )
                 emb=[f.embedding for f in new_embs if f.name==filename]
@@ -84,9 +93,13 @@ async def compare_image(request:CompareFacesRequest)->CompareFacesResponse:
 
 
 @image_search_router.post("/api/compare_kinship")
-def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
-    helper=resources.helper
-    manager=resources.manager
+@inject
+async def compare_kinship(request:CompareKinshipRequest,
+                        face_similarity_search:FaceSimilaritySearch=Depends(Provide[Container.face_similarity_search]),
+                        face_aligner:FaceAligner=Depends(Provide[Container.face_aligner]),
+                        embedding_generator:LocalEmbeddingGenerator|TritonEmbeddingGenerator=Depends(Provide[Container.embedding_generator]),
+                        emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]))->CompareKinshipResponse:
+
     detector_name = request.detector_name
     embedder_name = request.embedder_name
     kinship_embedder_name = request.kinship_embedder_name
@@ -110,40 +123,43 @@ def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
             face_num=0 if combochanges[i] == -2 else combochanges[i]
             aligned_filename = f"aligned_{face_num}_{uploaded_images[i]}"
 
-            existing_embedding = manager.get_embedding_by_name(
+            existing_embedding = emb_manager.get_embedding_by_name(
                 aligned_filename, detector_name, embedder_name
             )
             if(existing_embedding is None):
-                det_result = helper.create_aligned_images(
+                det_result = face_aligner.create_aligned_images(
                     uploaded_images[i], detector, []
                 )
                 if(isinstance(det_result,BaseError)):
                     raise HTTPException(500,jsonable_encoder(det_result));
                 
                 img, faces = det_result
-                result = helper.generate_all_emb(
+                result = embedding_generator.generate_all_emb(
                     img, faces, uploaded_images[i], detector, embedder
                 )
                 if(isinstance(result,BaseError)):
                     raise HTTPException(500,jsonable_encoder(result));
 
                 _, new_embs =result
-                manager.add_embedding_typed(
+                emb_manager.add_embedding_typed(
                         new_embs, detector_name, embedder_name
                     )
                 embedding=new_embs[face_num]
             else:
                 embedding=existing_embedding
 
-            similar_images=helper.get_similar_images(embedding.embedding,aligned_filename,detector_name,embedder_name,100,quality_thresh);
+            similar_images=face_similarity_search.get_similar_images(embedding.embedding,aligned_filename,detector_name,embedder_name,100,quality_thresh);
             for image in similar_images:
                 if image["similarity"]>=similarity_thresh:
                     #same person
-                    embedding_get_result=helper.emb_manager.get_embedding_by_name(image["Embedding"].name,detector_name,kinship_embedder_name)
+                    embedding_get_result=emb_manager.get_embedding_by_name(image["Embedding"].name,detector_name,kinship_embedder_name)
                     if(embedding_get_result is not None):
                         kinship_embedding=embedding_get_result.embedding
                         embeddings[i].append(kinship_embedding)
-            embeddings[i].append(helper.emb_manager.get_embedding_by_name(embedding.name,detector_name,kinship_embedder_name).embedding);
+                else:
+                    #it comes sorted by highest similarity first, if its not similar enough the rest are not either
+                    break;
+            embeddings[i].append(emb_manager.get_embedding_by_name(embedding.name,detector_name,kinship_embedder_name).embedding);
 
         kinship_similarity_matrix=cosine_similarity(embeddings[0],embeddings[1])
         average_similarity = np.mean(kinship_similarity_matrix)
@@ -153,8 +169,9 @@ def compare_kinship(request:CompareKinshipRequest)->CompareKinshipResponse:
     return response;
 
 @image_search_router.post("/api/check_many")
-def find_similar_images(request:SearchSimilarRequest)->SearchSimilarResponse:
-    helper=resources.helper
+@inject
+async def find_similar_images(request:SearchSimilarRequest,
+                        face_similarity_search:FaceSimilaritySearch=Depends(Provide[Container.face_similarity_search]))->SearchSimilarResponse:
     detector_name = request.detector_name
     embedder_name = request.embedder_name
     embedder = ModelLoader.load_embedder(embedder_name)
@@ -165,7 +182,7 @@ def find_similar_images(request:SearchSimilarRequest)->SearchSimilarResponse:
     selected_face = request.selected_face
     k = request.number_of_images
 
-    similar = helper.get_k_similar_images(
+    similar = face_similarity_search.get_k_similar_images(
         current_image, selected_face, similarity_thresh, detector, embedder, k,quality_thresh
     )
     if isinstance(similar,BaseError):
@@ -175,9 +192,12 @@ def find_similar_images(request:SearchSimilarRequest)->SearchSimilarResponse:
 
 
 @image_search_router.post("/api/check")
-def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarResponse|NoMatchResponse:
-    helper=resources.helper
-    manager=resources.manager
+@inject
+async def find_similar_image(request:SearchMostSimilarRequest,
+                              face_similarity_search:FaceSimilaritySearch=Depends(Provide[Container.face_similarity_search]),
+                        metadata_manager:MetadataManager=Depends(Provide[Container.metadata_manager]),
+                        emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]) )->SearchMostSimilarResponse|NoMatchResponse:
+
     base_detector_name = request.detector_name
     base_embedder_name = request.embedder_name
     base_embedder = ModelLoader.load_embedder(base_embedder_name)
@@ -194,7 +214,7 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
     if len(current_image)==0:
         raise HTTPException(400,detail="no images selected for check")
     if len(current_image) > 0:
-        similar_images = helper.get_k_similar_images(
+        similar_images = face_similarity_search.get_k_similar_images(
             current_image,
             selected_face,
             similarity_thresh,
@@ -211,7 +231,7 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
     if most_similar_image:
 
         face_length = len(
-            helper.get_image_faces(
+            metadata_manager.get_image_faces(
                 most_similar_image.image_name,-2, base_detector_name, base_embedder_name
             )
         )
@@ -220,27 +240,27 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
         generated_embeddings = {}
         embedder_name = next(iter(ModelLoader.embedders))
         for detector_name in ModelLoader.detectors:
-            embs = helper.emb_manager.get_image_embeddings(
+            embs = emb_manager.get_image_embeddings(
                 image_name, detector_name, embedder_name
             )
             if len(embs) == 0:
                 temp_detector=ModelLoader.load_detector(detector_name)
                 temp_embedder=ModelLoader.load_embedder(embedder_name)
                 
-                det_result = helper.create_aligned_images(
+                det_result = face_similarity_search.face_aligner.create_aligned_images(
                     image_name, temp_detector, []
                 )
                 if isinstance(det_result,BaseError):
                     raise HTTPException(500,detail=det_result)
                 img, faces = det_result
-                result = helper.generate_all_emb(
+                result = face_similarity_search.embedding_generator.generate_all_emb(
                     img, faces, image_name, temp_detector, temp_embedder
                 )
                 if isinstance(result,BaseError):
                     raise HTTPException(500,detail=result)
-                _, new_embs=result
+                _, new_embs,_=result
 
-                manager.add_embedding_typed(
+                emb_manager.add_embedding_typed(
                         new_embs, detector_name, embedder_name
                     )
                 embs=np.array([f.embedding for f in new_embs])
@@ -257,43 +277,8 @@ def find_similar_image(request:SearchMostSimilarRequest)->SearchMostSimilarRespo
 
     return NoMatchResponse()
 
-
-# @image_search_bp.route("/api/check_template", methods=["POST"])
-# def find_by_template():
-#     helper=resources.helper
-   
-#     most_similar_image = None
-#     messages = []
-#     errors = []
-#     box = []
-#     similarity = -1
-#     current_image = request.form.get("template")
-#     similarity_thresh = request.form.get("similarity_thresh", 0.5, type=float)
-#     if len(current_image) > 0:
-#         (
-#             most_similar_image,
-#             box,
-#             similarity,
-#             temp_err,
-#         ) = helper.get_most_similar_image_by_template(current_image, similarity_thresh)
-#         errors = errors + temp_err
-#     else:
-#         errors.append("no images selected for check")
-#     if most_similar_image:
-#         messages.append(
-#             f"The most similar image is {most_similar_image} with similarity of {similarity:.4f}"
-#         )
-#     return jsonify(
-#         {
-#             "image": most_similar_image,
-#             "box": box,
-#             "errors": errors,
-#             "messages": messages,
-#         }
-#     )
-
-
 @image_search_router.post("/api/filter")
+@inject
 def filter(request:SearchMostSimilarRequest):
     helper=resources.helper
     detector_name = request.detector_name

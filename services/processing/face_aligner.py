@@ -1,0 +1,77 @@
+import os
+from insightface.utils.face_align import norm_crop
+import cv2
+from services.models import BaseDetectorModel
+from config.app_paths import AppPaths
+import numpy as np
+from .local.local_face_extractor import LocalFaceExtractor
+from .triton.triton_face_extractor import TritonFaceExtractor
+from models.errors import FaceExtractionError
+
+
+class FaceAligner:
+    def __init__(self,face_extractor:LocalFaceExtractor|TritonFaceExtractor):
+        self.face_extractor=face_extractor
+
+    def __align_single_image(
+        self,
+        face:dict,
+        selected_face: int,
+        filename: str,
+        img: np.ndarray,
+        detector_name: str,
+    ):
+        landmarks = face["kps"].astype(int)
+        aligned_filename = f"aligned_{selected_face}_{filename}"
+        aligned_path = os.path.join(AppPaths.STATIC_FOLDER, detector_name, aligned_filename)
+        aligned_img = norm_crop(img, landmarks, 112, "arcface")
+        cv2.imwrite(aligned_path, aligned_img)
+        return aligned_filename
+    
+    def detect_faces_in_image(
+        self,filename: str, model: BaseDetectorModel, images: list
+    ):
+        img, faces = self.face_extractor.extract_faces(filename, model)
+        boxes = []
+        if faces:
+            for face in faces:
+                landmarks = face["kps"].astype(int)
+                for point in landmarks:
+                    cv2.circle(
+                        img,
+                        (int(point[0]), int(point[1])),
+                        5,
+                        (0, 0, 255),
+                        -1,
+                    )
+                box = face["bbox"].astype(int).tolist()
+                boxes.append(box)
+            detected_filename = "detected_" + filename
+            detected_path = os.path.join(
+                AppPaths.STATIC_FOLDER, model.name, detected_filename
+            )
+
+            cv2.imwrite(detected_path, img)
+            images.append(detected_filename)
+
+        else:
+            images.append(filename)
+        return len(faces), boxes
+    
+    def create_aligned_images(
+        self, filename: str, detector: BaseDetectorModel, images: list
+    ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
+        img, faces =  self.face_extractor.extract_faces(filename, detector)
+        if not faces:
+            print("No faces detected.")  # Debug log
+            return FaceExtractionError(detector_name=detector.name,reason="No Faces Detected!")
+
+        
+        for i in range(len(faces)):
+            aligned_filename = self.__align_single_image(
+                    faces[i], i, filename, img, detector.name
+                )  
+            images.append(aligned_filename)
+        #its bad code cause it iterates over the list of faces 3 times...
+
+        return img, faces

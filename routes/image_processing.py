@@ -1,4 +1,5 @@
-from modules import AppPaths,ModelLoader
+from services import ModelLoader
+from config.app_paths import AppPaths
 from . import resources
 import os
 import cv2

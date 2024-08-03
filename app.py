@@ -1,17 +1,33 @@
 import os
-from modules import (
-    AppPaths,
+from services import (
     ModelLoader,
 )
+from contextlib import asynccontextmanager
+from config.app_paths import AppPaths
 from fastapi.staticfiles import StaticFiles
 from routes import register_routes,resources
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
-from models import EmbedderName,DetectorName
+from fastapi import FastAPI,Depends
+from dependency_injector.wiring import inject, Provide
+from routes.resources import Container
 import uvicorn
 from middlewares import register_middlewares
 
-app=FastAPI();
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # OnStartup
+    await resources.init_resources(app=app);
+
+    yield
+    # OnShutdown
+    pass;
+
+
+
+
+
+app=FastAPI(lifespan=lifespan);
 origins = [
     "http://localhost:5000",
     "http://127.0.0.1:5000",
@@ -36,11 +52,13 @@ for model in ModelLoader.detectors:
     os.makedirs(os.path.join(STATIC_FOLDER, model), exist_ok=True)
 register_middlewares(app)
 register_routes(app)
-#DEBUG ONLY REMOVE IN PRODUCTION
+
+#TODO:DEBUG ONLY REMOVE IN PRODUCTION
 @app.get("/api/delete")
-def delete_embeddings():
+@inject
+
+def delete_embeddings(manager=Depends(Provide[Container.emb_manager])):
     # delete all the saved databases states
-    manager=resources.manager
     manager.delete_all()
     return {"result": "success"}
 
@@ -49,7 +67,6 @@ def delete_embeddings():
 
 
 
-resources.init_resources();
 
 app.mount("/static",StaticFiles(directory="static"),name="static");
 app.mount("/pool",StaticFiles(directory="pool"),name="pool");

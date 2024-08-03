@@ -4,7 +4,7 @@ import traceback
 from .retinaface50.retinaface import RetinaFace 
 from .base_detector_model import BaseDetectorModel
 sys.path.append(os.path.abspath('..'))
-from modules.util import are_bboxes_similar
+from services.util import are_bboxes_similar
 sys.path.append(os.path.abspath('../..'))
 from insightface.app.common import Face
 import cv2
@@ -21,7 +21,7 @@ class EranRetinaFaceDetector(BaseDetectorModel):
         self.face_ratio_thresh=0.001
     def CreateDetector(self,root):
         try:
-            detector = RetinaFace(os.path.join(root,"modules/models/face_embedding/detectors/retinaface50/R50"), 0)
+            detector = RetinaFace(os.path.join(root,"services/models/face_embedding/detectors/retinaface50/R50"), 0)
             return detector;
         except Exception as e:
             tb = traceback.format_exc()

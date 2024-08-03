@@ -6,3 +6,4 @@ from fastapi import   Form
 class CompareKinshipClustersRequest(BaseRequest):
     cluster_id_1:str
     cluster_id_2:str
+    kinship_embedder_name:str

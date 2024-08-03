@@ -135,7 +135,7 @@ ext_modules = [
 ]
 
 if CUDA is not None:
-    ext_modules.append(
+    ext_services.append(
         Extension(
             'gpu_nms',
             ['nms_kernel.cu', 'gpu_nms.pyx'],

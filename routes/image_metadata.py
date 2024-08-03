@@ -1,16 +1,21 @@
-from modules import AppPaths,util,ModelLoader
-from . import resources
+from services import util,ModelLoader
+from config.app_paths import AppPaths
 import os
 from models.requests import GetImageMetadataRequest
 from models.responses import FindFaceResponse,GetDetectorIndicesResponse 
-from fastapi import APIRouter,HTTPException
+from services.stores import MetadataManager
+from dependency_injector.wiring import inject, Provide
+from routes.resources import Container
+from fastapi import APIRouter,HTTPException,Depends
 import numpy as np
 
 image_metadata_router=APIRouter()
 
 @image_metadata_router.post("/api/find")
-def find_face_in_image(request:GetImageMetadataRequest):
-    helper=resources.helper
+@inject
+def find_face_in_image(request:GetImageMetadataRequest,
+    metadata_manager:MetadataManager=Depends(Provide[Container.metadata_manager])):
+
     face_num=request.selected_face
     filename = request.image
     detector_name = request.detector_name
@@ -25,7 +30,7 @@ def find_face_in_image(request:GetImageMetadataRequest):
         path = os.path.join(AppPaths.STATIC_FOLDER,request.detector_name.value, f"aligned_{face_num}_{filename}")
 
     if os.path.exists(path):
-        faces = helper.get_image_faces(
+        faces = metadata_manager.get_image_faces(
             filename, face_num,detector_name=detector_name, embedder_name=embedder_name
         )
         faces_length = len(faces)
@@ -37,35 +42,11 @@ def find_face_in_image(request:GetImageMetadataRequest):
 
 
 @image_metadata_router.post("/api/get_indices")
-def get_detector_indices(request:GetImageMetadataRequest):
-    helper=resources.helper
-    manager=resources.manager
+@inject
+def get_detector_indices(request:GetImageMetadataRequest,
+    metadata_manager:MetadataManager=Depends(Provide[Container.metadata_manager])):
     filename = request.image
-    generated_embeddings = {}
     return_detector= request.detector_name
-    embedder_name=next(iter(ModelLoader.embedders))
-    for detector_name in ModelLoader.detectors:
-        embs = helper.emb_manager.get_image_embeddings(
-                filename, detector_name, embedder_name
-            )
-        if len(embs) == 0:
-            temp_detector=ModelLoader.load_detector(detector_name)
-            temp_embedder=ModelLoader.load_embedder(embedder_name)
-            img, faces = helper.create_aligned_images(
-                filename, temp_detector, []
-            )
-            if img is not None and faces is not None:
-                _, new_embs, _ = helper.generate_all_emb(
-                    img, faces, filename, temp_detector, temp_embedder
-                )
-                manager.add_embedding_typed(
-                        new_embs, detector_name, embedder_name
-                    )
-                embs=np.array([f.embedding for f in new_embs])
-
-        generated_embeddings[f"{detector_name}_{embedder_name}"] = embs
-
-    detector_indices = util.get_all_detectors_faces(
-        generated_embeddings, return_detector
-    )    
+   
+    detector_indices =metadata_manager.get_detector_indices(filename,return_detector)
     return GetDetectorIndicesResponse(detector_indices=detector_indices)

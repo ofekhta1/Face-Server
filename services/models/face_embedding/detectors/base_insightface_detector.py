@@ -3,7 +3,7 @@ import os
 import traceback
 import insightface
 from .base_detector_model import BaseDetectorModel
-from modules.util import are_bboxes_similar
+from services.util import are_bboxes_similar
 sys.path.append(os.path.abspath('..'))
 sys.path.append(os.path.abspath('../..'))
 from insightface.app.common import Face

@@ -7,17 +7,16 @@ from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingMa
 from models.errors import FaceEmbeddingError,FaceExtractionError
 from models.errors.base_error import BaseError 
 from models.similar_image import SimilarImage
-from .local import LocalEmbeddingGenerator
+from .local.local_embedding_generator import LocalEmbeddingGenerator
 from .face_aligner import FaceAligner
-from .triton import TritonEmbeddingGenerator
 from services.models import BaseDetectorModel,BaseEmbedderModel
 import time
-
+from .image_loader import ImageLoader
 
 class FaceSimilaritySearch:
     
     def __init__(self,emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager,
-                 embedding_generator:LocalEmbeddingGenerator|TritonEmbeddingGenerator,
+                 embedding_generator:LocalEmbeddingGenerator,
                  face_aligner:FaceAligner):
         
         self.emb_manager=emb_manager
@@ -43,9 +42,10 @@ class FaceSimilaritySearch:
             aligned_filename, detector_name=detector.name, embedder_name=embedder.name
         )
         if(embedding is None):
+            img=ImageLoader.load_image(filename,detector);
 
             det_result = self.face_aligner.create_aligned_images(
-                filename, detector, []
+                filename, img=img,detector=detector
             )
             if(isinstance(det_result,BaseError)):
                 return det_result;

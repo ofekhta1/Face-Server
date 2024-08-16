@@ -1,47 +1,43 @@
-from . import (BaseDetectorModel,BaseEmbedderModel,EranRetinaFaceDetector,
-               BaseGenderAgeModel,MobileNet_CelebA,
-               SCRFD10G,ResNet50WebFace600K,
-               ResNet100GLint360K,RetinaFace10GF,Kinship_FS,Kinship_BB)
-from models.detector_name import DetectorName
-from models.embedder_name import EmbedderName
-
+from .face_embedding.embedders import (
+    BaseEmbedderModel
+)
+from .face_embedding.detectors import (
+    BaseDetectorModel
+)
+from .face_embedding.genderage import BaseGenderAgeModel
 class ModelLoader:
-    embedders={EmbedderName.resnet100:ResNet100GLint360K,EmbedderName.resnet50:ResNet50WebFace600K,EmbedderName.bb:Kinship_BB,
-               EmbedderName.fs:Kinship_FS}
-    detectors={DetectorName.retinaface_antelope: SCRFD10G, DetectorName.retinaface_buffalo:RetinaFace10GF
-               ,DetectorName.eran_retinaface:EranRetinaFaceDetector}
+
+    def __init__(self):
+        self.genderAge = {}
+        self.instances = {}
+        self.detectors = {}
+        self.embedders = {}
+
+    def load_embedder(self, model_name, root="",is_batch:bool=False) -> BaseEmbedderModel:
+        if model_name in self.instances:
+            return self.instances[model_name]
+        elif model_name in self.embedders:
+            model = self.embedders[model_name](root=root)
+            self.instances[model_name] = model
+            return model
+        # Model Doesnt exist!
+        return None
+
+    def load_detector(self, model_name, root="", is_batch=False) -> BaseDetectorModel:
+        if model_name in self.instances:
+            return self.instances[model_name]
+        elif model_name in self.detectors:
+            model = self.detectors[model_name](root=root)
+            self.instances[model_name] = model
+            return model
+        # Model Doesnt exist!
+        return None
     
-    genderAge={"MobileNetCeleb0.25_CelebA": MobileNet_CelebA}
-
-    instances={}
-
-    @staticmethod
-    def load_embedder(model_name,root="")-> BaseEmbedderModel:
-        if(model_name in ModelLoader.instances):
-            return ModelLoader.instances[model_name]
-        elif model_name in ModelLoader.embedders:
-            model= ModelLoader.embedders[model_name](root=root);
-            ModelLoader.instances[model_name]=model
+    def load_genderage(self, model_name, root="") -> BaseGenderAgeModel:
+        if model_name in self.instances:
+            return self.instances[model_name]
+        elif model_name in self.genderAge:
+            model = self.genderAge[model_name](root=root)
+            self.instances[model_name] = model
             return model
-        #Model Doesnt exist!
-        return None 
-    
-    @staticmethod
-    def load_detector(model_name,root="")-> BaseDetectorModel:
-        if(model_name in ModelLoader.instances):
-            return ModelLoader.instances[model_name]
-        elif model_name in ModelLoader.detectors:
-            model= ModelLoader.detectors[model_name](root=root);
-            ModelLoader.instances[model_name]=model
-            return model
-        #Model Doesnt exist!
-        return None 
-    @staticmethod
-    def load_genderage(model_name,root="")->BaseGenderAgeModel:
-        if(model_name in ModelLoader.instances):
-            return ModelLoader.instances[model_name]
-        elif model_name in ModelLoader.genderAge:
-            model= ModelLoader.genderAge[model_name](root=root);
-            ModelLoader.instances[model_name]=model
-            return model
-
+        return None

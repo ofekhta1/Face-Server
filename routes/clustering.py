@@ -2,11 +2,11 @@
 from fastapi import APIRouter,HTTPException,Depends
 from routes.resources import Container
 from dependency_injector.wiring import inject, Provide
-from services.processing import FaceClustering
+from services.processing.face_clustering import FaceClustering
 from services.stores import ImageGroupRepository
 from models.detector_name import DetectorName
 from models.embedder_name import EmbedderName
-from models.requests import GetClustersRequest, ChangeGroupNameRequest,CompareKinshipClustersRequest
+from models.requests import GetClustersRequest, ChangeGroupNameRequest,CompareKinshipClustersRequest,AssignClusterRequest
 from models.responses import CompareKinshipResponse
 
 clustering_router=APIRouter()
@@ -24,11 +24,23 @@ def make_clusters(request:GetClustersRequest,
     embedder_name = request.embedder_name
 
     value_groups = face_clustering.cluster_images(
-        eps, min_samples, detector_name=detector_name, embedder_name=embedder_name,quality_thresh=quality_thresh
+        eps, min_samples, detector_name=detector_name, embedder_name=embedder_name,quality_thresh=quality_thresh,retrain=request.retrain
     )
 
     return value_groups
    
+@clustering_router.post("/api/assign_group")
+@inject
+def assign_group(request:AssignClusterRequest,
+               groups:ImageGroupRepository=Depends(Provide[Container.groups]))-> dict[str, list[str]]:
+    detector_name=request.detector_name
+    embedder_name=request.embedder_name
+    img_name=f"aligned_{request.selected_face}_{request.image}"
+    if(not groups.has_group(detector_name,embedder_name)):
+        raise HTTPException(400,f"Group for Detector:{detector_name} and Embedder:{embedder_name} does not exist!") 
+    
+    success=groups.assign(img_name,request.cluster_id,detector_name,embedder_name);
+    return {"success":success}
 
 @clustering_router.get("/api/get_groups")
 @inject
@@ -56,7 +68,6 @@ def change_group_name(request:ChangeGroupNameRequest,
     detector_name = request.detector_name
     embedder_name = request.embedder_name
     groups.change_group_name(request.old, request.new, detector_name, embedder_name)
-    groups.save_index(detector_name)
     return {"success":True}
 
 

@@ -8,5 +8,5 @@ OnnxModels/*/*.onnx
 OnnxModels/*/*.zip
 volumes/
 experiments/*
-services/models/face_embedding/detectors/retinaface50/rcnn/**/**.so
-services/models/face_embedding/detectors/retinaface50/*.params
+services/models/face_embedding/detectors/local/retinaface50/rcnn/**/**.so
+services/models/face_embedding/detectors/local/retinaface50/*.params

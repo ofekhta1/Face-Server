@@ -22,12 +22,12 @@ class ImageLoader:
 
 
     @staticmethod
-    def load_image( filename: str, model: BaseDetectorModel):
+    def load_image( filename: str, detector_name: str=""):
         if(not ImageLoader.allowed_file(filename)):
             return None;
     
         if filename.startswith("aligned_") or filename.startswith("detected_"):
-            path = os.path.join(AppPaths.STATIC_FOLDER, model.name, filename)
+            path = os.path.join(AppPaths.STATIC_FOLDER, detector_name, filename)
         else:
             path = os.path.join(AppPaths.UPLOAD_FOLDER, filename)
         img = cv2.imread(path)

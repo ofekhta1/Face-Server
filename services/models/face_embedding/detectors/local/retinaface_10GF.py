@@ -2,7 +2,7 @@ from .base_insightface_detector import BaseInsightfaceDetector
 from models.detector_name import DetectorName
 import os
 
-class RetinaFace10GF(BaseInsightfaceDetector):
+class LocalRetinaFace10GF(BaseInsightfaceDetector):
     def __init__(self,root=""):
         self.name=DetectorName.retinaface_buffalo
         self.model_name = os.path.join(root,"OnnxModels","Detectors","det_10g.onnx") # Use the face recognition model

@@ -15,10 +15,10 @@ from models.embedder_name import EmbedderName
 from ..util import norm_path
 
 class InMemoryImageEmbeddingManager:
-    def __init__(self,root_path:str):
-        
+    def __init__(self,root_path:str,model_loader:ModelLoader):
+        self.model_loader=model_loader
         self.db_embeddings:dict[str,StoredDetectorEmbeddings]={};
-        for detector_name,_ in ModelLoader.detectors.items():
+        for detector_name,_ in model_loader.detectors.items():
             PKL_PATH=os.path.join(root_path,"static",detector_name,"embeddings.pkl");
             self.db_embeddings[detector_name]= StoredDetectorEmbeddings({},pkl_path=PKL_PATH)
     
@@ -125,12 +125,16 @@ class InMemoryImageEmbeddingManager:
         path=norm_path(copy.PKL_PATH)
         if os.path.exists(path):
             os.remove(path);
-    
-    def save(self,detector_name:str):
-        data=self.db_embeddings[detector_name];
-        path=norm_path(data.PKL_PATH)
-        with open(path, 'wb') as file:
-            pickle.dump(data, file)
+   
+    def save(self,detector_name:str=None):
+        if detector_name is None:
+            for detector_name in self.db_embeddings:
+                self.save(detector_name);
+        else:
+            data=self.db_embeddings[detector_name];
+            path=norm_path(data.PKL_PATH)
+            with open(path, 'wb') as file:
+                pickle.dump(data, file)
 
     def load(self,detector_name:str):
         data=self.db_embeddings[detector_name];

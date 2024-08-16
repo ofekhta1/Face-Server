@@ -17,8 +17,8 @@ class LocalEmbeddingGenerator:
         self.face_extractor=face_extractor
         self.emb_manager=emb_manager
     
-    
-    def generate_all_emb(
+
+    def generate_all_emb_for_file(
         self,
         filename: str,
         detector: BaseDetectorModel,
@@ -40,25 +40,18 @@ class LocalEmbeddingGenerator:
         filename: str,
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
-        gender_age:BaseGenderAgeModel=None
     ) -> FaceEmbeddingError|tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding]]:
         if not faces:
             return FaceEmbeddingError(reason="Faces not exctracted",embedder_name=embedder.name)
         faces=faces.copy();
         aligned_images = []
-        embeddings = []
 
-        for i in range(len(faces)):
-            try:
-                embedding = embedder.embed(img, faces[i])
-                norm = np.linalg.norm(embedding)
-                embedding=embedding/norm;
-                embeddings.append(embedding)
-                aligned_filename = f"aligned_{i}_{filename}"
+        try:
+            embeddings = embedder.embed(img, faces)
+            aligned_images=[f"aligned_{i}_{filename}" for i in range(len(embeddings))]
 
-                aligned_images.append(aligned_filename)
-            except Exception as ex:
-                return FaceEmbeddingError(embedder_name=embedder.name)
+        except Exception as ex:
+            return FaceEmbeddingError(embedder_name=embedder.name,reason=str(ex))
 
         # internal dedup code
 
@@ -85,26 +78,35 @@ class LocalEmbeddingGenerator:
                 faces[dups_index] = None
                 aligned_images[dups_index] = None
 
-        filtered_embeddings = [e for e in embeddings if e is not None]
-        filtered_faces = [f for f in faces if f is not None]
-        filtered_aligned_images = [ai for ai in aligned_images if ai is not None]
+        filtered_data = [(e, f, ai) for e, f, ai in zip(embeddings, faces, aligned_images) if not np.isnan(e[0])  and f is not None and ai is not None]
+        filtered_embeddings, filtered_faces, filtered_aligned_images = map(list, zip(*filtered_data)) if filtered_data else ([], [], [])
+
+        for idx,fimg in enumerate(filtered_aligned_images):
+            original_path=os.path.join(AppPaths.STATIC_FOLDER, detector.name,fimg)
+            parts=fimg.split('_',2);
+            fimg_filename=parts[-1];
+            new_name=f"aligned_{idx}_{fimg_filename}"
+            new_path=os.path.join(AppPaths.STATIC_FOLDER, detector.name,new_name )
+            os.rename(original_path,new_path)
+            filtered_aligned_images[idx]=new_name
         face_embeddings:list[FaceEmbedding]=[]
-        for i in range(len(filtered_faces)):
-            bbox=[int(coord) for coord in filtered_faces[i]['bbox']]
-            landmarks=[(x[0],x[1]) for x in filtered_faces[i]["kps"]]
-            quality=filtered_faces[i]["quality"] if "quality" in filtered_faces[i] else 1
-            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i],quality=quality,landmarks=landmarks)
-            if(gender_age):
-                f.gender,f.age=gender_age.get_gender_age(img,filtered_faces[i]);          
+
+        for i,face in enumerate(filtered_faces):
+            bbox=[int(coord) for coord in face['bbox']]
+            landmarks=[(x[0],x[1]) for x in face["kps"]]
+            quality=face["quality"] if "quality" in face else 1
+            f=FaceEmbedding(filtered_aligned_images[i],bbox,filtered_embeddings[i],gender=face.gender,age=face.age,quality=quality,landmarks=landmarks)
             face_embeddings.append(f);
+        
         #check if embeddings exist in emb_manager,in batch
         query=np.array([f.embedding for f in face_embeddings])
         similar=self.emb_manager.search(query,1,detector.name,embedder.name)
         distance_dup_thresh=0.95
         for i in range(len(similar)):
-            closest=similar[i][0]
-            if closest['distance']> distance_dup_thresh:
-                face_embeddings[i].is_dup=True
+            if len(similar[i])>0:
+                closest=similar[i][0]
+                if closest['distance']> distance_dup_thresh:
+                    face_embeddings[i].is_dup=True
 
         
         # self.emb_manager.set_face_count(filename,len(filtered_faces),detector_name=model.name)
@@ -121,7 +123,7 @@ class LocalEmbeddingGenerator:
         embedding = None
         img, faces = self.face_extractor.extract_faces(filename, detector)
         if not faces:
-            return FaceExtractionError(detector.name,reason="Failed to extract faces");
+            return FaceExtractionError(detector_name=detector.name,reason="Failed to extract faces");
         if selected_face == -2 or len(faces) == 1:
             i = 0
         else:

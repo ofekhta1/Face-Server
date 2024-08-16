@@ -3,7 +3,7 @@ import numpy as np
 from typing import Union,List
 
 class FaceEmbedding:
-    def __init__(self,name:str,box:list[int],embedding:np.ndarray,quality:float=1,landmarks:list[list[float]]=[],gender:str="",age:int=-1):
+    def __init__(self,name:str,box:list[int],embedding:np.ndarray,quality:float=1,landmarks:list[list[float]]=[],gender:str="",age:int=-1,is_dup=False):
         self.name=name
         self.box=box#[x1,y1,x2,y2]
         self.landmarks=landmarks#[[x1,y1],[x2,y2]...]
@@ -11,7 +11,7 @@ class FaceEmbedding:
         self.gender=gender
         self.age=age
         self.quality=quality
-        self.is_dup=False
+        self.is_dup=is_dup
 
 
 class StoredEmbeddings:

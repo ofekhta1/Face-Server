@@ -9,3 +9,4 @@ from .get_clusters_request import GetClustersRequest
 from .process_images_request import ProcessImagesRequest
 from .change_group_name_request import ChangeGroupNameRequest
 from .compare_kinship_clusters_request import CompareKinshipClustersRequest
+from .assign_cluster_request import AssignClusterRequest

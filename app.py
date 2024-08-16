@@ -1,7 +1,5 @@
 import os
-from services import (
-    ModelLoader,
-)
+from services.models.model_loader import ModelLoader
 from contextlib import asynccontextmanager
 from config.app_paths import AppPaths
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +16,9 @@ from middlewares import register_middlewares
 async def lifespan(app: FastAPI):
     # OnStartup
     await resources.init_resources(app=app);
-
+    model_loader=app.container.default_model_loader()
+    for model in model_loader.detectors:
+        os.makedirs(os.path.join(STATIC_FOLDER, model), exist_ok=True)
     yield
     # OnShutdown
     pass;
@@ -46,10 +46,8 @@ app.add_middleware(
 
 APP_DIR=AppPaths.APP_DIR;
 STATIC_FOLDER=AppPaths.STATIC_FOLDER;
-
 # create processing folders for each model
-for model in ModelLoader.detectors:
-    os.makedirs(os.path.join(STATIC_FOLDER, model), exist_ok=True)
+
 register_middlewares(app)
 register_routes(app)
 
@@ -74,6 +72,6 @@ app.mount("/pool",StaticFiles(directory="pool"),name="pool");
 
 if __name__ == "__main__":
     try:
-        uvicorn.run("app:app", host="0.0.0.0", port=5057,workers=1)
+        uvicorn.run("app:app", host="0.0.0.0", port=5057)
     except Exception as e:
         print(f"Error: {e}")

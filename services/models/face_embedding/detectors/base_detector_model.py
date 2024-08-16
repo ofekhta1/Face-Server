@@ -3,4 +3,4 @@ class BaseDetectorModel:
         self.name="base"
         
     def extract_faces(self,img)->list[dict]:
-        raise Exception("Extract Faces Not Implemented")
+        raise Exception(f"Extract Faces Not Implemented For Detector: {self.name}")

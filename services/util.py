@@ -2,12 +2,19 @@ import numpy as np
 import os
 from sklearn.metrics.pairwise import cosine_similarity
 from insightface.utils.face_align import estimate_norm
+from models.errors.base_error import BaseError
 
-def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_detector:str):
+def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_detector:str,model_loader)->dict[str,list]|BaseError:
     detector_indices:dict[str,list[int]]={}
+  
     base_detector_embs=[]
     for models in generated_embeddings:
         detector,embedder=models.split('_')
+        if f"{return_detector}_{embedder}" not in generated_embeddings:
+            if return_detector not in model_loader.detectors:
+                raise Exception(f"The return_detector {return_detector} does not exist!")
+            else:
+                return BaseError(reason=f"No embeddings were created with return detector and the embedder {embedder}")
         if(detector!=return_detector):
             base_detector_embs = generated_embeddings[f"{return_detector}_{embedder}"]
             other_embeddings = generated_embeddings[f"{detector}_{embedder}"]
@@ -42,6 +49,17 @@ def euclidean_distance(point1, point2):
 
 def are_bboxes_similar(bbox1, bbox2, threshold):
     return all(euclidean_distance(p1, p2) <= threshold for p1, p2 in zip(bbox1, bbox2))
+
+def filter_faces(close_faces,far_faces):
+    faces=far_faces.copy();
+    for j in range(len(close_faces)):
+        duplicate=False;
+        for far_face in far_faces:
+            if(are_bboxes_similar(close_faces[j]['bbox'],far_face['bbox'],20)):
+                duplicate=True;
+        if(not duplicate):
+            faces.append(close_faces[j])
+    return faces
 
 #calculate the similarity between two images 
 def calculate_similarity(emb_a, emb_b):

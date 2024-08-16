@@ -1,17 +1,18 @@
 from models.face_info import FaceInfo
 from models.detector_name import DetectorName
 from . import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
-from services.models import ModelLoader
+from services.models.model_loader import ModelLoader
 from services import util
-from services.processing import FaceAligner
-from services.processing.local import LocalEmbeddingGenerator
-from services.processing.triton import TritonEmbeddingGenerator
+from services.processing.face_aligner import FaceAligner
+from services.processing.local.local_embedding_generator import LocalEmbeddingGenerator
 import numpy as np
 
 class MetadataManager:
     def __init__(self,emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager,
                  face_aligner:FaceAligner,
-                 embedding_generator:LocalEmbeddingGenerator|TritonEmbeddingGenerator):
+                 embedding_generator:LocalEmbeddingGenerator,
+                 model_loader:ModelLoader):
+        self.model_loader=model_loader
         self.emb_manager=emb_manager
         self.face_aligner=face_aligner
         self.embedding_generator=embedding_generator
@@ -28,16 +29,16 @@ class MetadataManager:
     def get_detector_indices(self,filename:str,return_detector:DetectorName):
         generated_embeddings = {}
 
-        embedder_name=next(iter(ModelLoader.embedders))
-        for detector_name in ModelLoader.detectors:
+        embedder_name=next(iter(self.model_loader.embedders))
+        for detector_name in self.model_loader.detectors:
             embs = self.emb_manager.get_image_embeddings(
                     filename, detector_name, embedder_name
                 )
             if len(embs) == 0:
-                temp_detector=ModelLoader.load_detector(detector_name)
-                temp_embedder=ModelLoader.load_embedder(embedder_name)
+                temp_detector=self.model_loader.load_detector(detector_name)
+                temp_embedder=self.model_loader.load_embedder(embedder_name)
                 img, faces = self.face_aligner.create_aligned_images(
-                    filename, temp_detector, []
+                    filename, temp_detector
                 )
                 if img is not None and faces is not None:
                     _, new_embs, _ = self.embedding_generator.generate_all_emb(

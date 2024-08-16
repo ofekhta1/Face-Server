@@ -1,2 +1,0 @@
-from .triton_face_extractor import TritonFaceExtractor 
-from .triton_embedding_generator import TritonEmbeddingGenerator

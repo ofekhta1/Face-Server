@@ -1,5 +1,6 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings,SettingsConfigDict
+import os
+from pydantic import Field,BaseModel
+from pydantic_settings import BaseSettings
 from enum import Enum
 from typing import Optional
 
@@ -12,26 +13,22 @@ class StoreType(str, Enum):
     Memory = "memory"
     Milvus = "milvus"
 
-class StoreSettings(BaseSettings):
+class StoreSettings(BaseModel):
     Type: StoreType = Field(StoreType.Memory)
     URL: str = Field("http://localhost:19530")
 
-    class Config:
-        env_prefix = 'Store_'
 
-
-class ProcessingSettings(BaseSettings):
+class ProcessingSettings(BaseModel):
     Type: ProcessingType = Field(ProcessingType.Local)
-    TritonURL: Optional[str] = Field("http://localhost:8081")
+    TritonURL: Optional[str] = Field("localhost:8080")
 
-    class Config:
-        env_prefix = 'Processing_'
 
 class Settings(BaseSettings):
-    Store: StoreSettings = StoreSettings()
-    Processing: ProcessingType = Field(ProcessingType.Local)
-
+    Store: StoreSettings
+    Processing: ProcessingSettings 
     class Config:
         env_file = '.env'
         env_file_encoding = 'utf-8'
-        case_sensitive = False
+        env_nested_delimiter="__"
+        case_sensitive = True
+

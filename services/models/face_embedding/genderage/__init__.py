@@ -1,2 +1,3 @@
 from .mobilenet_celebA import MobileNet_CelebA
 from .base_genderage_model import BaseGenderAgeModel
+from .triton_GenderAge import Triton_GenderAge

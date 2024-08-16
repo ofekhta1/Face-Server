@@ -10,13 +10,13 @@ from pymilvus import MilvusClient,DataType
 from typing import Union,List
 
 class MilvusImageEmbeddingManager:
-    def __init__(self,uri):
+    def __init__(self,url,model_loader:ModelLoader):
         self.client = MilvusClient(
-            uri=uri
+            uri=url
         )
-        
-        for detector_name in ModelLoader.detectors:
-            for embedder_name in ModelLoader.embedders:
+        self.model_loader=model_loader
+        for detector_name in model_loader.detectors:
+            for embedder_name in model_loader.embedders:
                 collection_name=self.get_collection_name(detector_name,embedder_name)
                 if(not self.client.has_collection(collection_name=collection_name)):
                     schema = MilvusClient.create_schema(
@@ -32,6 +32,7 @@ class MilvusImageEmbeddingManager:
                     schema.add_field(field_name="Quality", datatype=DataType.FLOAT)
                     schema.add_field(field_name="Age", datatype=DataType.INT16)
                     schema.add_field(field_name="Gender", datatype=DataType.VARCHAR,max_length=5)
+                    schema.add_field(field_name="IsDup", datatype=DataType.BOOL)
                     index_params = self.client.prepare_index_params()
                     index_params.add_index(
                         field_name="Embedding",
@@ -58,7 +59,7 @@ class MilvusImageEmbeddingManager:
         if face_num==-2:
             query=f"FileName=='{filename}'"
         else:
-            query=f"FileName=='{filename}' && FaceNum=='{face_num}'"
+            query=f"FileName=='{filename}' && FaceNum=={face_num}"
         results=self.client.query(collection_name,query,output_fields=["Box","Landmarks","Quality"])
         landmarks=[]
         found=[]
@@ -74,10 +75,11 @@ class MilvusImageEmbeddingManager:
         results=self.client.query(collection_name,f"FileName=='{filename}'",output_fields=["Embedding"])
         embeddings=[r['Embedding'] for r in results]
         return embeddings;#convert to array
-    def get_all_embeddings(self,detector_name:str,embedder_name:str,quality_thresh=0):
+    def get_all_embeddings(self,detector_name:str,embedder_name:str,dedup:bool=True,quality_thresh=0):
         collection_name=self.get_collection_name(detector_name,embedder_name)
         results=self.client.query(collection_name,f"Quality>={quality_thresh}",output_fields=["Embedding","FileName","FaceNum","Quality","Box"])
         return [self.__build_face_embedding(r) for r in results];
+  
     def __generate_data_from_face_embedding(self,embedding:FaceEmbedding):
         parts=embedding.name.split('_',2);
         filename=parts[-1];
@@ -91,7 +93,8 @@ class MilvusImageEmbeddingManager:
             "Landmarks":landmarks,
             "Quality":embedding.quality,
             "Age":embedding.age,
-            "Gender":embedding.gender
+            "Gender":embedding.gender,
+            "IsDup":embedding.is_dup
         }
         return data;
     def add_embedding_typed(self,embedding:Union[FaceEmbedding,List[FaceEmbedding]],detector_name:str,embedder_name:str):
@@ -140,10 +143,11 @@ class MilvusImageEmbeddingManager:
         quality=data["Quality"] if "Quality" in data else 1;
         age=data["Age"] if "Age" in data else -1;
         gender=data["Gender"] if "Gender" in data else "";
+        is_dup=data["IsDup"] if "IsDup" in data else False;
         landmarks=[]
         if "Landmarks" in data:
             landmarks = [(data["Landmarks"][i], data["Landmarks"][i + 1]) for i in range(0, len(data["Landmarks"]), 2)]
-        return FaceEmbedding(name,box,embedding,quality=quality,landmarks=landmarks,gender=gender,age=age);
+        return FaceEmbedding(name,box,embedding,quality=quality,landmarks=landmarks,gender=gender,age=age,is_dup=is_dup);
 
     def get_index_by_name(self,name:str,detector_name:str,embedder_name:str)->int:
         parts=name.split('_',2);
@@ -175,19 +179,19 @@ class MilvusImageEmbeddingManager:
             search_params={"metric_type": "IP", "params": {}} # Search parameters
         )
         
-        return [{"index":result['id'],'distance':result['distance'],'Embedding':self.__build_face_embedding(result['entity'])} for result in results[0]]
+        return [[{"index":result['id'],'distance':result['distance'],'Embedding':self.__build_face_embedding(result['entity'])} for result in single_query] for single_query in results]
     def delete_all(self):
-        for detector_name in ModelLoader.detectors:
+        for detector_name in self.model_loader.detectors:
             self.delete(detector_name);
     def delete(self,detector_name:str):
-        for embedder_name in ModelLoader.embedders:
+        for embedder_name in self.model_loader.embedders:
             collection_name=self.get_collection_name(detector_name,embedder_name)
             self.client.drop_collection(collection_name);
     
-    def save(self,detector_name:str):
+    def save(self,detector_name:str=None):
         pass;
     def load(self,detector_name:str):
-        for embedder_name in ModelLoader.embedders:
+        for embedder_name in self.model_loader.embedders:
             collection_name=self.get_collection_name(detector_name,embedder_name);
             if(self.client.has_collection(collection_name)):
                 self.client.load_collection(collection_name)

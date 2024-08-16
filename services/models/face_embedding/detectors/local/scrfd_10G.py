@@ -2,7 +2,7 @@ from .base_insightface_detector import BaseInsightfaceDetector
 from models.detector_name import DetectorName
 import os
 
-class SCRFD10G(BaseInsightfaceDetector):
+class LocalSCRFD10G(BaseInsightfaceDetector):
     def __init__(self,root=""):
         self.name=DetectorName.retinaface_antelope
         self.model_name = os.path.join(root,"OnnxModels","Detectors","scrfd_10g_bnkps.onnx") # Use the face recognition model

@@ -1,4 +1,5 @@
 class BaseGenderAgeModel:
+    providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
     def __init__(self):
         self.name="base_genderage"
         

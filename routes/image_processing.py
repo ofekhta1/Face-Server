@@ -1,11 +1,13 @@
-from services import ModelLoader
+from services.models.model_loader import ModelLoader
 from config.app_paths import AppPaths
 from . import resources
 import os
 import cv2
-from fastapi import APIRouter,HTTPException
+from routes.resources import Container
+from services.processing.face_aligner import FaceAligner
 from models.requests import ProcessImagesRequest
-
+from dependency_injector.wiring import inject, Provide
+from fastapi import APIRouter,Depends
 image_processing_router=APIRouter()
 
 @image_processing_router.post("/api/improve")
@@ -15,7 +17,7 @@ def improve_image(request):
     image = request.form.get("image")
     detector_name = request.form.get("detector_name", default="SCRFD10G", type=str)
     embedder_name = request.form.get(
-        "embedder_name", default="ResNet100GLint360K", type=str
+        "embedder_name", default="Local_ResNet100GLint360K", type=str
     )
     detector = ModelLoader.load_detector(detector_name)
     embedder = ModelLoader.load_embedder(embedder_name)
@@ -35,7 +37,7 @@ def improve_image(request):
                 enhanced_image = "enhanced_" + image
 
                 img, faces, temp_err = helper.create_aligned_images(
-                    "enhanced_" + image, detector, []
+                    "enhanced_" + image, detector
                 )
                 img, faces, embeddings, aligned_images, temp_err = (
                     helper.generate_all_emb(
@@ -62,12 +64,14 @@ def improve_image(request):
 
 
 @image_processing_router.post("/api/align")
-def align_image(request:ProcessImagesRequest):
-    helper=resources.helper
+@inject
+def align_image(request:ProcessImagesRequest,
+                 model_loader:ModelLoader=Depends(Provide[Container.default_model_loader]),
+                 face_aligner:FaceAligner=Depends(Provide[Container.face_aligner])):
     
     uploaded_images = request.images
     detector_name = request.detector_name
-    detector = ModelLoader.load_detector(detector_name)
+    detector = model_loader.load_detector(detector_name)
     faces_length = []
     errors = []
     images=[]
@@ -79,7 +83,7 @@ def align_image(request:ProcessImagesRequest):
         else:
             path = os.path.join(AppPaths.UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            _, faces = helper.create_aligned_images(filename, detector, images)
+            _, faces = face_aligner.create_aligned_images(filename, detector, images)
             faces_length.append(len(faces))
         else:
             errors.append(f"File {filename} does not exist!")
@@ -94,11 +98,13 @@ def align_image(request:ProcessImagesRequest):
 # creates detected images for faces for all uploaded images for a specific model
 # the detected images contain kps (5 points)
 @image_processing_router.post("/api/detect")
-def detect_image(request:ProcessImagesRequest):
+def detect_image(request:ProcessImagesRequest,
+                 model_loader:ModelLoader=Depends(Provide[Container.default_model_loader])
+                 ):
     helper=resources.helper
     uploaded_images = request.images
     detector_name = request.detector_name
-    detector = ModelLoader.load_detector(detector_name)
+    detector = model_loader.load_detector(detector_name)
     faces_length = []
     errors = []
     images = []

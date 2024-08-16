@@ -12,7 +12,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 import cv2
 import time
-from services.models import BaseGenderAgeModel,BaseDetectorModel,BaseEmbedderModel,FamilyClassifier
 
 
 class ImageHelper:

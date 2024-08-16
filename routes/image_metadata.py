@@ -1,4 +1,5 @@
-from services import util,ModelLoader
+from services import util
+from services.models.model_loader import ModelLoader
 from config.app_paths import AppPaths
 import os
 from models.requests import GetImageMetadataRequest

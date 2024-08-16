@@ -332,6 +332,7 @@ class RetinaFace:
                     #min_size_dict = self._rpn_min_size_fpn
 
                     sym_idx = 0
+                    results= [x.asnumpy() for x in net_out]
 
                     for _idx, s in enumerate(self._feat_stride_fpn):
                         #if len(scales)>1 and s==32 and im_scale==scales[-1]:
@@ -344,7 +345,7 @@ class RetinaFace:
                         #if self.vote and stride==4 and len(scales)>2 and (im_scale==scales[0]):
                         #  continue
                         #print('getting', im_scale, stride, idx, len(net_out), data.shape, file=sys.stderr)
-                        scores = net_out[sym_idx].asnumpy()
+                        scores = results[sym_idx]
                         if self.debug:
                             timeb = datetime.datetime.now()
                             diff = timeb - timea
@@ -354,7 +355,7 @@ class RetinaFace:
                         scores = scores[:, self._num_anchors['stride%s' %
                                                              s]:, :, :]
 
-                        bbox_deltas = net_out[sym_idx + 1].asnumpy()
+                        bbox_deltas = results[sym_idx + 1]
 
                         #if DEBUG:
                         #    print 'im_size: ({}, {})'.format(im_info[0], im_info[1])
@@ -412,9 +413,9 @@ class RetinaFace:
                             if not self.use_landmarks:
                                 __idx = [2, 3]
                             for diff_idx in __idx:
-                                if sym_idx + diff_idx >= len(net_out):
+                                if sym_idx + diff_idx >= len(results):
                                     break
-                                body = net_out[sym_idx + diff_idx].asnumpy()
+                                body = results[sym_idx + diff_idx]
                                 if body.shape[1] // A == 2:  #cls branch
                                     if cls_cascade or bbox_cascade:
                                         break
@@ -501,7 +502,7 @@ class RetinaFace:
                             strides_list.append(_strides)
 
                         if not self.vote and self.use_landmarks:
-                            landmark_deltas = net_out[sym_idx + 2].asnumpy()
+                            landmark_deltas = results[sym_idx + 2]
                             #landmark_deltas = self._clip_pad(landmark_deltas, (height, width))
                             landmark_pred_len = landmark_deltas.shape[1] // A
                             landmark_deltas = landmark_deltas.transpose(

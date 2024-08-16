@@ -5,5 +5,5 @@ from ..detector_name import DetectorName
 from ..embedder_name import EmbedderName 
 
 class BaseRequest(BaseModel):
-    detector_name:DetectorName=DetectorName.retinaface_antelope
+    detector_name:DetectorName=DetectorName.retinaface_buffalo
     embedder_name:EmbedderName=EmbedderName.resnet100

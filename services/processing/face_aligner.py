@@ -1,19 +1,18 @@
 import os
 from insightface.utils.face_align import norm_crop
 import cv2
-from services.models import BaseDetectorModel
+from services.models.face_embedding.detectors.base_detector_model import BaseDetectorModel
 from config.app_paths import AppPaths
 import numpy as np
 from .local.local_face_extractor import LocalFaceExtractor
-from .triton.triton_face_extractor import TritonFaceExtractor
 from models.errors import FaceExtractionError
 
 
 class FaceAligner:
-    def __init__(self,face_extractor:LocalFaceExtractor|TritonFaceExtractor):
+    def __init__(self,face_extractor:LocalFaceExtractor):
         self.face_extractor=face_extractor
 
-    def __align_single_image(
+    def align_single_image(
         self,
         face:dict,
         selected_face: int,
@@ -59,19 +58,35 @@ class FaceAligner:
         return len(faces), boxes
     
     def create_aligned_images(
-        self, filename: str, detector: BaseDetectorModel, images: list
+        self, filename: str, detector: BaseDetectorModel
     ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
         img, faces =  self.face_extractor.extract_faces(filename, detector)
-        if not faces:
-            print("No faces detected.")  # Debug log
+        if faces is None or len(faces)==0:
+            if img is None:
+                return FaceExtractionError(detector_name=detector.name,reason=f"Image {filename} could not be loaded!")
             return FaceExtractionError(detector_name=detector.name,reason="No Faces Detected!")
 
         
         for i in range(len(faces)):
-            aligned_filename = self.__align_single_image(
+            aligned_filename = self.align_single_image(
                     faces[i], i, filename, img, detector.name
                 )  
-            images.append(aligned_filename)
-        #its bad code cause it iterates over the list of faces 3 times...
+
+        return img, faces
+    
+    def create_aligned_images(
+        self,filename:str, img: cv2.Mat, detector: BaseDetectorModel
+    ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
+        img, faces =  self.face_extractor.extract_faces(img, detector)
+        if faces is None or len(faces)==0:
+            if img is None:
+                return FaceExtractionError(detector_name=detector.name,reason=f"Image {filename} could not be loaded!")
+            return FaceExtractionError(detector_name=detector.name,reason="No Faces Detected!")
+
+        
+        for i in range(len(faces)):
+            aligned_filename = self.align_single_image(
+                    faces[i], i, filename, img, detector.name
+                )  
 
         return img, faces

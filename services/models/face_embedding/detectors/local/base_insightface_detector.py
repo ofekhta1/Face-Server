@@ -2,8 +2,8 @@ import sys
 import os
 import traceback
 import insightface
-from .base_detector_model import BaseDetectorModel
-from services.util import are_bboxes_similar
+from ..base_detector_model import BaseDetectorModel
+from services.util import filter_faces
 sys.path.append(os.path.abspath('..'))
 sys.path.append(os.path.abspath('../..'))
 from insightface.app.common import Face
@@ -38,15 +38,7 @@ class BaseInsightfaceDetector(BaseDetectorModel):
             close_faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(close_results[0],close_results[1])]
             far_faces=[Face(bbox=bbox[0:4],kps=kps,det_score=bbox[4]) for bbox,kps in zip(far_results[0],far_results[1])]
 
-            faces=far_faces.copy();
-            for j in range(len(close_faces)):
-                        duplicate=False;
-                        for far_face in far_faces:
-                            if(are_bboxes_similar(close_faces[j]['bbox'],far_face['bbox'],20)):
-                                duplicate=True;
-                        if(not duplicate):
-                            faces.append(close_faces[j])
-            return faces
+            return filter_faces(close_faces,far_faces)
         except Exception as e:
             print("Error during face extraction:", e)
             return None;

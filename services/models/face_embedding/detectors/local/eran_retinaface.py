@@ -1,7 +1,6 @@
 import sys
 import os
 import traceback
-from .retinaface50.retinaface import RetinaFace 
 from ..base_detector_model import BaseDetectorModel
 sys.path.append(os.path.abspath('..'))
 sys.path.append(os.path.abspath('../..'))

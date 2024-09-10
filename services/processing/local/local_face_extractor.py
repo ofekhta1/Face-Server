@@ -29,6 +29,6 @@ class LocalFaceExtractor:
     def extract_faces(self,img, model: BaseDetectorModel):
         if img is not None:
             faces= model.extract_faces(img)
-            faces=self.add_quality_to_faces(img,faces);
+            faces,_=self.add_quality_to_faces(img,faces);
             return img,faces;
         return img,None

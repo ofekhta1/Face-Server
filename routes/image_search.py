@@ -1,6 +1,5 @@
 from services import util
 from services.models.model_loader import ModelLoader
-from config.app_paths import AppPaths
 from models.requests import CompareFacesRequest,CompareKinshipRequest,SearchSimilarRequest,SearchMostSimilarRequest
 from models.responses import CompareFacesResponse,CompareKinshipResponse,SearchSimilarResponse,SearchMostSimilarResponse,NoMatchResponse
 from . import resources 
@@ -275,7 +274,7 @@ async def find_similar_image(request:SearchMostSimilarRequest,
             generated_embeddings[f"{detector_name}_{embedder_name}"] = embs
 
         detector_indices = util.get_all_detectors_faces(
-            generated_embeddings, base_detector_name
+            generated_embeddings, base_detector_name,model_loader
         )
 
         response=SearchMostSimilarResponse(image=image_name,face=face_num,face_length=face_length,

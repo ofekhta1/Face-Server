@@ -5,9 +5,9 @@ import sys
 import gdown
 import zipfile
 
-major,minor=0
+major,minor=0,0
 def clone_repo(repo_url, destination):
-    git.Repo.clone_from(repo_url, destination)
+    git.Repo.clone_from(repo_url, destination,branch="dev")
 
 
 def install_requirements(repo_path):
@@ -40,8 +40,8 @@ def download_models_gdrive(model_name:str,model_file_id:str,save_path:str):
             zip_ref.extractall(save_path)
 def download_models():
     model_ids={
-        "Embedders":"1lnHB3FFLXOenJ-KCnMvKibcj0y7CY2e4",
-        "Detectors":"1gm8KET04Q-ZGIfAX9M0dHUtHPuSRK8EW",
+        "Embedders":"1DvFdtaatD-8chzoLhBnez__-6WvsKsCp",
+        "Detectors":"1AH20O8Xgb_LbJXhAwXLwlCmXZwerh3NZ",
         "GenderAge":"1kEil84PS1Sp_yAQ9SLAVbeNzdLl5Peu3"
     }
     for model in model_ids:

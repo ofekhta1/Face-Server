@@ -38,14 +38,14 @@ class LocalModelLoader(ModelLoader):
     def __get_local_embedders(self):
         return {
             EmbedderName.resnet100: Local_ResNet100GLint360K,
-            EmbedderName.resnet50: Local_ResNet50WebFace600K,
-            EmbedderName.fs: Local_Kinship_FS,
-            EmbedderName.bb: Local_Kinship_BB,
-            EmbedderName.ss: Local_Kinship_SS,
-            EmbedderName.sibs: Local_Kinship_SIBS,
-            EmbedderName.md: Local_Kinship_MD,
-            EmbedderName.ms: Local_Kinship_MS,
-            EmbedderName.fd: Local_Kinship_FD,
+            # EmbedderName.resnet50: Local_ResNet50WebFace600K,
+            # EmbedderName.fs: Local_Kinship_FS,
+            # EmbedderName.bb: Local_Kinship_BB,
+            # EmbedderName.ss: Local_Kinship_SS,
+            # EmbedderName.sibs: Local_Kinship_SIBS,
+            # EmbedderName.md: Local_Kinship_MD,
+            # EmbedderName.ms: Local_Kinship_MS,
+            # EmbedderName.fd: Local_Kinship_FD,
         }
 
 

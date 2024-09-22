@@ -32,15 +32,15 @@ def make_clusters(request:GetClustersRequest,
 @clustering_router.post("/api/assign_group")
 @inject
 def assign_group(request:AssignClusterRequest,
-               groups:ImageGroupRepository=Depends(Provide[Container.groups]))-> dict[str, list[str]]:
+               groups:ImageGroupRepository=Depends(Provide[Container.groups])):
     detector_name=request.detector_name
     embedder_name=request.embedder_name
     img_name=f"aligned_{request.selected_face}_{request.image}"
     if(not groups.has_group(detector_name,embedder_name)):
         raise HTTPException(400,f"Group for Detector:{detector_name} and Embedder:{embedder_name} does not exist!") 
     
-    success=groups.assign(img_name,request.cluster_id,detector_name,embedder_name);
-    return {"success":success}
+    new_group=groups.assign(img_name,request.cluster_id,detector_name,embedder_name);
+    return {"new_group":new_group}
 
 @clustering_router.get("/api/get_groups")
 @inject
@@ -67,8 +67,8 @@ def change_group_name(request:ChangeGroupNameRequest,
 
     detector_name = request.detector_name
     embedder_name = request.embedder_name
-    groups.change_group_name(request.old, request.new, detector_name, embedder_name)
-    return {"success":True}
+    new_group=groups.change_group_name(request.old, request.new, detector_name, embedder_name)
+    return {"new_group":new_group}
 
 
 @clustering_router.get("/api/get_group_images")

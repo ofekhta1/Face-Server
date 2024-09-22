@@ -41,7 +41,7 @@ class LocalImageProcessor:
         gender_age_model=self.model_loader.load_genderage("MobileNetCeleb0.25_CelebA");
         
         # load model
-        for detector_name in self.model_loader.detectors:
+        for detector_name in self.model_loader.model_registry["detectors"]:
             detector = self.model_loader.load_detector(model_name=detector_name)
             
             det_result = self.face_aligner.create_aligned_images(
@@ -52,7 +52,7 @@ class LocalImageProcessor:
                     continue;
             img, faces = det_result
             genders,ages=gender_age_model.get_gender_age(img,faces)
-            for embedder_name in self.model_loader.embedders:
+            for embedder_name in self.model_loader.model_registry["embedders"]:
                 embedder = self.model_loader.load_embedder(
                     model_name=embedder_name
                 )

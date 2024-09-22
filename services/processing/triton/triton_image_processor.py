@@ -25,22 +25,24 @@ class TritonImageProcessor:
         generated_embeddings: dict[str, list[np.ndarray]] = {}
         img=ImageLoader.load_image(filename,detector_name=DetectorName.eran_retinaface);#default detectorname,wont be used anyways cause it loads from pool
         gender_age_model=self.model_loader.load_genderage("MobileNetCeleb0.25_CelebA");
+        quality_model=self.model_loader.load_quality(model_name="resnet50_quality");
         input_img_arr=np.array([img])
         input_image = httpclient.InferInput("input_image", input_img_arr.shape, datatype="UINT8")
         input_image.set_data_from_numpy(input_img_arr, binary_data=True)
 
         response=TritonClientHandler.infer("pipeline",[input_image])
-        for detector_name in self.model_loader.detectors:
+        for detector_name in self.model_loader.model_registry["detectors"]:
             kpss=response.as_numpy(f"{detector_name}_kps")[0];
             dets=response.as_numpy(f"{detector_name}_dets")[0];
             faces=[Face(bbox=det[0:4],kps=kps,det_score=det[4])  for det,kps in zip(dets,kpss)]
             if len(faces)==0:
                 print(f"No faces detected for detector: {detector_name}")
                 continue;
-            faces,sorted_indices=self.face_extractor.add_quality_to_faces(img,faces)
+            faces,sorted_indices=self.face_extractor.add_quality_to_faces(img,faces,quality_model)
             genders,ages=gender_age_model.get_gender_age(img,faces)
+            aligned_images=[self.face_aligner.align_single_image(face,i,filename,img,detector_name) for i,face in enumerate(faces)]
 
-            for embedder_name in self.model_loader.embedders:
+            for embedder_name in self.model_loader.model_registry["embedders"]:
                 embeddings=response.as_numpy(f"{detector_name}_{embedder_name}_embeddings");
                 embeddings=[embeddings[i] for i in sorted_indices]#sort by quality,so it matches the faces order
                 norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -53,7 +55,7 @@ class TritonImageProcessor:
                                
                 for i,face in enumerate(faces):
                     # face["embedding"]=normalized_embeddings[i] #no need to store embedding cause it is saved as DTO
-                    aligned_image_name=self.face_aligner.align_single_image(face,i,filename,img,detector_name)
+                    aligned_image_name=aligned_images[i]
                     bbox=[int(coord) for coord in face['bbox']]
                     landmarks=[(x[0],x[1]) for x in face["kps"]]
                     quality=face["quality"] if "quality" in face else 1

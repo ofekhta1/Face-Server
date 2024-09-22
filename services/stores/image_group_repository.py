@@ -12,7 +12,7 @@ from services.models.model_loader import ModelLoader
 class ImageGroupRepository:
     def __init__(self, root_path: str, model_loader: ModelLoader):
         self.groups: dict[DetectorName, StoredDetectorGroup] = {}
-        for model_name, _ in model_loader.detectors.items():
+        for model_name, _ in model_loader.model_registry["detectors"].items():
             PKL_PATH = os.path.join(root_path, "static", model_name, "groups.pkl")
             self.groups[model_name] = StoredDetectorGroup({}, PKL_PATH=PKL_PATH)
             self.load_index(model_name)
@@ -59,12 +59,15 @@ class ImageGroupRepository:
     ):
         group = self.groups[detector_name].groups[embedder_name]
         faces = group.id_groups[old_id]
+        if new_id not in group.id_groups:
+            group.id_groups[new_id]=[]
         for face in faces:
             group.index[face] = new_id
-        group.id_groups[new_id] = group.id_groups[old_id]
+            group.id_groups[new_id].append(face)
         del group.id_groups[old_id]
         self.__internal_save_index(detector_name)
-
+        return group.id_groups[new_id]
+    
     def get_all_faces(
         self, detector_name: DetectorName, embedder_name: EmbedderName
     ) -> dict[str, str]:
@@ -96,7 +99,7 @@ class ImageGroupRepository:
         group_id: str,
         detector_name: DetectorName,
         embedder_name: EmbedderName,
-    )->bool:
+    )->list[str]:
         if not self.has_group(detector_name, embedder_name):
             return False
         group = self.groups[detector_name].groups[embedder_name]
@@ -107,5 +110,7 @@ class ImageGroupRepository:
         group.index[img_name] = group_id
         if group_id in group.id_groups:
             group.id_groups[group_id].append(img_name)
+        else:
+            group.id_groups[group_id]=[img_name]
         self.__internal_save_index(detector_name)
-        return True;
+        return group.id_groups[group_id];

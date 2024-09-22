@@ -7,7 +7,7 @@ from models.errors.base_error import BaseError
 import shutil
 import traceback
 from fastapi.encoders import jsonable_encoder
-
+from models.processing_message import ProcessingMessage
 from fastapi.responses import JSONResponse
 import sys
 import numpy as np
@@ -19,6 +19,7 @@ from dependency_injector.wiring import inject, Provide
 from services.processing.local.local_image_processor import LocalImageProcessor
 from services.processing.triton.triton_image_processor import TritonImageProcessor
 from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
+from services.queue import InMemoryProcessingQueue
 import zipfile
 
 # Define directories
@@ -135,6 +136,7 @@ async def upload_zip(
     return_embedder: Annotated[EmbedderName, Body(alias="embedder_name")]= EmbedderName.resnet100,
     save_invalid: Annotated[Optional[bool], Body()]=False,
     
+    queue:InMemoryProcessingQueue=Depends(Provide[Container.queue]),
     image_processor:LocalImageProcessor|TritonImageProcessor=Depends(Provide[Container.default_image_processor]),
     emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]),
     )->UploadImagesResponse:
@@ -160,17 +162,15 @@ async def upload_zip(
 
     # Remove the zip file after extraction
     os.remove(zip_path)
-
-   
-                    
-    response = await internal_image_upload(file_names,emb_manager,image_processor,return_detector,return_embedder,save_invalid)
+    message=ProcessingMessage(image_paths=file_names,return_detector=return_detector,return_embedder=return_embedder, save_invalid=save_invalid)
+    queue.enqueue(message)
+    return UploadImagesResponse(images=file_names,invalid_images=[],detector_indices=[],faces_length=[]);
+    # response = await internal_image_upload(file_names,emb_manager,image_processor,return_detector,return_embedder,save_invalid)
     
-    valid_images,invalid_images,detector_indices,faces_length,temp_errors=response
-    errors=errors+temp_errors
-    return UploadImagesResponse(images=valid_images,invalid_images=invalid_images,
-                                detector_indices=detector_indices,
-                                faces_length=faces_length,errors=errors);
-    
+    # if isinstance(response,BaseError):
+        # raise HTTPException(500,jsonable_encoder(response));
+    # response.errors=response.errors+errors
+    # return response
 
 
 

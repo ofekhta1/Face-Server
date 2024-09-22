@@ -18,7 +18,7 @@ class InMemoryImageEmbeddingManager:
     def __init__(self,root_path:str,model_loader:ModelLoader):
         self.model_loader=model_loader
         self.db_embeddings:dict[str,StoredDetectorEmbeddings]={};
-        for detector_name,_ in model_loader.detectors.items():
+        for detector_name,_ in model_loader.model_registry["detectors"].items():
             PKL_PATH=os.path.join(root_path,"static",detector_name,"embeddings.pkl");
             self.db_embeddings[detector_name]= StoredDetectorEmbeddings({},pkl_path=PKL_PATH)
     
@@ -108,7 +108,7 @@ class InMemoryImageEmbeddingManager:
                 data.index.add_with_ids(np.vstack(filtered),ids)
             else:
                 data.index = faiss.IndexFlatIP(512);
-                data.index.add(np.vstack([e.embedding for e in data.embeddings]))
+                data.index.add(np.vstack([e.embedding for e in data.embeddings]).astype(np.float32))
 
         results=self.find_closest_vector(data,q_embeddings,k);
         return results;
@@ -145,7 +145,7 @@ class InMemoryImageEmbeddingManager:
 
     def find_closest_vector(self,data:StoredEmbeddings,q_vectors:np.ndarray[np.float32],k:int):
 
-        distances,indexes = data.index.search(q_vectors, k)
+        distances,indexes = data.index.search(q_vectors.astype(np.float32), k)
         # return indexes based on distance
         # Create a list of objects
         result = []

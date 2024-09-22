@@ -15,8 +15,8 @@ class MilvusImageEmbeddingManager:
             uri=url
         )
         self.model_loader=model_loader
-        for detector_name in model_loader.detectors:
-            for embedder_name in model_loader.embedders:
+        for detector_name in model_loader.model_registry["detectors"]:
+            for embedder_name in model_loader.model_registry["embedders"]:
                 collection_name=self.get_collection_name(detector_name,embedder_name)
                 if(not self.client.has_collection(collection_name=collection_name)):
                     schema = MilvusClient.create_schema(
@@ -181,17 +181,17 @@ class MilvusImageEmbeddingManager:
         
         return [[{"index":result['id'],'distance':result['distance'],'Embedding':self.__build_face_embedding(result['entity'])} for result in single_query] for single_query in results]
     def delete_all(self):
-        for detector_name in self.model_loader.detectors:
+        for detector_name in self.model_loader.model_registry["detectors"]:
             self.delete(detector_name);
     def delete(self,detector_name:str):
-        for embedder_name in self.model_loader.embedders:
+        for embedder_name in self.model_loader.model_registry["embedders"]:
             collection_name=self.get_collection_name(detector_name,embedder_name)
             self.client.drop_collection(collection_name);
     
     def save(self,detector_name:str=None):
         pass;
     def load(self,detector_name:str):
-        for embedder_name in self.model_loader.embedders:
+        for embedder_name in self.model_loader.model_registry["embedders"]:
             collection_name=self.get_collection_name(detector_name,embedder_name);
             if(self.client.has_collection(collection_name)):
                 self.client.load_collection(collection_name)

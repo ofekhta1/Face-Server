@@ -17,16 +17,20 @@ from .face_embedding.embedders import (
 from .face_embedding.genderage import MobileNet_CelebA
 from models.detector_name import DetectorName
 from models.embedder_name import EmbedderName
+from services.models.face_embedding.quality import ResnetQualityEmbedder, FaceSizeQuality
 from .model_loader import ModelLoader
 
 class LocalModelLoader(ModelLoader):
 
     def __init__(self):
-        self.embedders = self.__get_local_embedders()
-        self.detectors = self.__get_local_detectors()
-        self.genderAge = {"MobileNetCeleb0.25_CelebA": MobileNet_CelebA}
-        self.instances = {}
-
+        super().__init__()  # Initialize the parent class ModelLoader
+        self.model_registry['embedders'] = self.__get_local_embedders()
+        self.model_registry['detectors'] = self.__get_local_detectors()
+        self.model_registry['genderAge'] = {"MobileNetCeleb0.25_CelebA": MobileNet_CelebA}
+        self.model_registry['quality'] = {
+            "resnet50_quality": ResnetQualityEmbedder,
+            "face_size_quality": FaceSizeQuality
+        }
 
     def __get_local_detectors(self):
         return {
@@ -34,10 +38,10 @@ class LocalModelLoader(ModelLoader):
             DetectorName.eran_retinaface: LocalEranRetinaFaceDetector,
         }
 
-
     def __get_local_embedders(self):
         return {
             EmbedderName.resnet100: Local_ResNet100GLint360K,
+            # You can uncomment the following if needed
             # EmbedderName.resnet50: Local_ResNet50WebFace600K,
             # EmbedderName.fs: Local_Kinship_FS,
             # EmbedderName.bb: Local_Kinship_BB,
@@ -47,9 +51,3 @@ class LocalModelLoader(ModelLoader):
             # EmbedderName.ms: Local_Kinship_MS,
             # EmbedderName.fd: Local_Kinship_FD,
         }
-
-
-
-
-
-

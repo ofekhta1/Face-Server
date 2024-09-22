@@ -14,6 +14,7 @@ from services.processing.triton.triton_embedding_generator import TritonEmbeddin
 from config.config import Settings
 from models.stored_embedding import StoredEmbeddings
 from dependency_injector import containers,providers
+from services.queue import InMemoryProcessingQueue,Consumer
 from services.processing.triton.triton_client_handler import TritonClientHandler
 import os
 
@@ -40,9 +41,9 @@ class Container(containers.DeclarativeContainer):
     groups=providers.Singleton(ImageGroupRepository,AppPaths.APP_DIR,default_model_loader)
     face_extractor=providers.Selector(
         config.Processing.Type,
-        local=providers.Singleton(LocalFaceExtractor),
-        mixed= providers.Singleton(LocalFaceExtractor),
-        triton= providers.Singleton(TritonFaceExtractor),
+        local=providers.Singleton(LocalFaceExtractor,default_model_loader),
+        mixed= providers.Singleton(LocalFaceExtractor,default_model_loader),
+        triton= providers.Singleton(TritonFaceExtractor,default_model_loader),
     )
     embedding_generator=providers.Selector(
         config.Processing.Type,
@@ -56,13 +57,19 @@ class Container(containers.DeclarativeContainer):
     face_similarity_search=providers.Singleton(FaceSimilaritySearch,emb_manager,embedding_generator,face_aligner);
     metadata_manager=providers.Singleton(MetadataManager,emb_manager,face_aligner,embedding_generator,default_model_loader);
 
-
+    queue = providers.Singleton(InMemoryProcessingQueue)
     default_image_processor=providers.Selector(
         config.Processing.Type,
         local= providers.Singleton(LocalImageProcessor,emb_manager,face_aligner,embedding_generator,default_model_loader),
         mixed= providers.Singleton(LocalImageProcessor,emb_manager,face_aligner,embedding_generator,default_model_loader),
         triton= providers.Singleton(TritonImageProcessor,emb_manager,face_aligner,face_extractor,default_model_loader),
     )
+    consumer=providers.Selector(
+        config.Queue.Type,
+        memory = providers.Singleton(Consumer, queue,emb_manager,default_image_processor),
+        rabbitmq = providers.Singleton(Consumer, queue,emb_manager,default_image_processor,config.Queue.URL)
+    )
+
 async def init_resources(app):
     # global groups,helper,manager,cfg
     container=Container()
@@ -72,26 +79,28 @@ async def init_resources(app):
     container.config.from_dict(settings.model_dump())
     container.init_resources()
     TritonClientHandler.init(container.config.Processing.TritonURL())
-    model_loader=container.default_model_loader()
+    model_loader:ModelLoader=container.default_model_loader()
     modules=[f"routes.{m.split('.')[0]}" for m in os.listdir("routes") if not m.startswith("__")]
     modules.append("app")
     container.wire(modules=modules)
 
-    for model_name, _ in model_loader.detectors.items():
+    for model_name, _ in model_loader.model_registry["detectors"].items():
         model_loader.load_detector(model_name, AppPaths.APP_DIR)
 
-    for model_name, _ in model_loader.embedders.items():
+    for model_name, _ in model_loader.model_registry["embedders"].items():
         model_loader.load_embedder(model_name, AppPaths.APP_DIR)
 
     model_loader.load_genderage("MobileNetCeleb0.25_CelebA", AppPaths.APP_DIR)
     
     manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=container.emb_manager();
-
-    for model_name, _ in model_loader.detectors.items():
+    if settings.Queue.Consume:
+        consumer=container.consumer();
+    
+    for model_name, _ in model_loader.model_registry["detectors"].items():
         model_loader.load_detector(model_name, AppPaths.APP_DIR)
         manager.load(model_name)
         if settings.Store.Type==StoreType.Memory:
-            for embedder_name, _ in model_loader.embedders.items():
+            for embedder_name, _ in model_loader.model_registry["embedders"].items():
                 if embedder_name not in manager.db_embeddings[model_name].embeddings:
                     manager.db_embeddings[model_name].embeddings[embedder_name] = (
                         StoredEmbeddings([])

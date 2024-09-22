@@ -245,8 +245,8 @@ async def find_similar_image(request:SearchMostSimilarRequest,
         image_name = most_similar_image.image_name
         face_num = most_similar_image.face_num
         generated_embeddings = {}
-        embedder_name = next(iter(model_loader.embedders))
-        for detector_name in model_loader.detectors:
+        embedder_name = next(iter(model_loader.model_registry["embedders"]))
+        for detector_name in model_loader.model_registry["detectors"]:
             embs = emb_manager.get_image_embeddings(
                 image_name, detector_name, embedder_name
             )

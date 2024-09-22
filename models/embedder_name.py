@@ -10,5 +10,8 @@ class EmbedderName(str,Enum):
     ms="KinshipMS"
     md="KinshipMD"
 
+
+    @staticmethod
     def is_kinship(embedder_name):
-        return embedder_name==EmbedderName.bb or embedder_name==EmbedderName.fs
+        kinship_models = {EmbedderName.bb, EmbedderName.fs, EmbedderName.ss, EmbedderName.sibs, EmbedderName.fd, EmbedderName.ms, EmbedderName.md}
+        return embedder_name in kinship_models

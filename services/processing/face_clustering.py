@@ -128,7 +128,8 @@ class FaceClustering:
         embeddings1=[]; 
         embeddings2=[];
         for image in images1:
-            embeddings1.append(self.emb_manager.get_embedding_by_name(image,detector_name,kinship_embedder_name).embedding);
+            emb=self.emb_manager.get_embedding_by_name(image,detector_name,kinship_embedder_name)
+            embeddings1.append(emb.embedding);
         for image in images2:
             embeddings2.append(self.emb_manager.get_embedding_by_name(image,detector_name,kinship_embedder_name).embedding);
 

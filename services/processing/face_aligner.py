@@ -60,7 +60,7 @@ class FaceAligner:
     def create_aligned_images(
         self, filename: str, detector: BaseDetectorModel
     ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
-        img, faces =  self.face_extractor.extract_faces(filename, detector)
+        img, faces =  self.face_extractor.extract_faces(filename, detector,"resnet50_quality")
         if faces is None or len(faces)==0:
             if img is None:
                 return FaceExtractionError(detector_name=detector.name,reason=f"Image {filename} could not be loaded!")
@@ -77,7 +77,7 @@ class FaceAligner:
     def create_aligned_images(
         self,filename:str, img: cv2.Mat, detector: BaseDetectorModel
     ) -> tuple[np.typing.NDArray[np.uint8], list]|FaceExtractionError:
-        img, faces =  self.face_extractor.extract_faces(img, detector)
+        img, faces =  self.face_extractor.extract_faces(img, detector,"resnet50_quality")
         if faces is None or len(faces)==0:
             if img is None:
                 return FaceExtractionError(detector_name=detector.name,reason=f"Image {filename} could not be loaded!")

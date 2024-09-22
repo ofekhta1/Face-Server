@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     # OnStartup
     await resources.init_resources(app=app);
     model_loader=app.container.default_model_loader()
-    for model in model_loader.detectors:
+    for model in model_loader.model_registry["detectors"]:
         os.makedirs(os.path.join(STATIC_FOLDER, model), exist_ok=True)
     yield
     # OnShutdown

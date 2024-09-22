@@ -29,8 +29,8 @@ class MetadataManager:
     def get_detector_indices(self,filename:str,return_detector:DetectorName):
         generated_embeddings = {}
 
-        embedder_name=next(iter(self.model_loader.embedders))
-        for detector_name in self.model_loader.detectors:
+        embedder_name=next(iter(self.model_loader.model_registry["embedders"]))
+        for detector_name in self.model_loader.model_registry["detectors"]:
             embs = self.emb_manager.get_image_embeddings(
                     filename, detector_name, embedder_name
                 )
@@ -52,6 +52,6 @@ class MetadataManager:
             generated_embeddings[f"{detector_name}_{embedder_name}"] = embs
 
         detector_indices = util.get_all_detectors_faces(
-            generated_embeddings, return_detector
+            generated_embeddings, return_detector,model_loader=self.model_loader
         )    
         return detector_indices

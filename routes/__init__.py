@@ -1,4 +1,3 @@
-from flask import Flask
 from fastapi import FastAPI
 # Import your blueprints
 from .file_handling import file_handling_router

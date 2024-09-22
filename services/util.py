@@ -11,7 +11,7 @@ def get_all_detectors_faces(generated_embeddings:dict[str,np.ndarray],return_det
     for models in generated_embeddings:
         detector,embedder=models.split('_')
         if f"{return_detector}_{embedder}" not in generated_embeddings:
-            if return_detector not in model_loader.detectors:
+            if return_detector not in model_loader.model_registry["detectors"]:
                 raise Exception(f"The return_detector {return_detector} does not exist!")
             else:
                 return BaseError(reason=f"No embeddings were created with return detector and the embedder {embedder}")

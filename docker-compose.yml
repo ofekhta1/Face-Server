@@ -68,6 +68,30 @@ services:
    depends_on:
      - "standalone"
 
+  face-server:
+   container_name: face-server
+   image: test:latest
+   env_file:
+     - .env
+   ports:
+     - "5057:5057"
+   networks:
+     - default
+
+
+  triton-server:
+    container_name: triton-server
+    image: dangrin/face-tritonserver:v1.0
+    networks:
+     - default
+    command: tritonserver --model-repository=/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 networks:
   default:
-    name: milvus
+   driver: bridge

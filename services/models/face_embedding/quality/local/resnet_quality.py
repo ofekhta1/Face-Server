@@ -27,11 +27,3 @@ class ResnetQualityEmbedder(BaseQualityModel):
         results=self.session.run(["embeddings","quality_scores"],{"faces":blob})
         quality_list = results[1].ravel().tolist()
         return quality_list;
-        
-    def get_quality_score_raw(self,img:cv2.Mat|list[cv2.Mat]):
-        embeddings = self.embedder.get_raw(img)
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-
-        # Normalize each row
-        normalized_embeddings = embeddings / norms
-        return normalized_embeddings;

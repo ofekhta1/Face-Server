@@ -5,7 +5,9 @@ from config.app_paths import AppPaths
 import os
 from models.errors.base_error import BaseError
 import shutil
+from services.util import face_path
 import traceback
+import tempfile
 from fastapi.encoders import jsonable_encoder
 from models.processing_message import ProcessingMessage
 from fastapi.responses import JSONResponse
@@ -18,27 +20,51 @@ from models import DetectorName,EmbedderName
 from dependency_injector.wiring import inject, Provide
 from services.processing.local.local_image_processor import LocalImageProcessor
 from services.processing.triton.triton_image_processor import TritonImageProcessor
+from services.stores.images import BaseImageStorage
 from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
 from services.queue import InMemoryProcessingQueue
 import zipfile
+from fastapi.responses import StreamingResponse,FileResponse
+import os
+import mimetypes
 
-# Define directories
-APP_DIR = os.path.dirname(sys.argv[0])
-UPLOAD_FOLDER = os.path.join(APP_DIR, "pool")
-STATIC_FOLDER = os.path.join(APP_DIR, "static")
-
-# create dirs
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, "no_face"), exist_ok=True)
-os.makedirs(STATIC_FOLDER, exist_ok=True)
-
-AppPaths.APP_DIR=APP_DIR
-AppPaths.STATIC_FOLDER=STATIC_FOLDER
-AppPaths.UPLOAD_FOLDER=UPLOAD_FOLDER
 
 file_handling_router=APIRouter()
 
 
+
+@file_handling_router.get("/static/{file_path:path}")
+@inject
+
+async def stream_static(file_path: str,
+                        image_storage:BaseImageStorage=Depends(Provide[Container.image_storage])):
+    file_stream=image_storage.serve_image(file_path,True);
+
+    if file_stream is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    media_type, _ = mimetypes.guess_type(file_path)
+    media_type = media_type or "application/octet-stream"
+
+    # Use a context manager to open the file
+    return StreamingResponse(file_stream, media_type=media_type)
+    
+@file_handling_router.get("/pool/{file_path:path}")
+@inject
+async def stream_pool(file_path: str,
+                        image_storage:BaseImageStorage=Depends(Provide[Container.image_storage])):
+                      
+    file_stream=image_storage.serve_image(file_path,False);
+
+    if file_stream is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    media_type, _ = mimetypes.guess_type(file_path)
+    media_type = media_type or "application/octet-stream"
+
+    # Use a context manager to open the file
+    return StreamingResponse(file_stream, media_type=media_type)
+    
 @file_handling_router.post("/api/upload")
 @inject
 async def upload_image(
@@ -46,6 +72,7 @@ async def upload_image(
     return_detector: Annotated[DetectorName, Body(alias="detector_name")]= DetectorName.retinaface_buffalo,
     return_embedder: Annotated[EmbedderName, Body(alias="embedder_name")]= EmbedderName.resnet100,
     save_invalid: Annotated[Optional[bool], Body()]=False,
+    image_storage:BaseImageStorage=Depends(Provide[Container.image_storage]),
     image_processor:LocalImageProcessor|TritonImageProcessor=Depends(Provide[Container.default_image_processor]),
     emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]),)->UploadImagesResponse:
     file_names=[]
@@ -53,30 +80,38 @@ async def upload_image(
     for file in files:
         if file.filename:
             filename = file.filename.replace("_", "")
-            if ImageLoader.allowed_file(file.filename):
-                path = os.path.join(AppPaths.UPLOAD_FOLDER, file.filename)
-                try:
-                    # save image
-                    with open(path,"wb") as buffer:
-                        shutil.copyfileobj(file.file,buffer)
-                        file_names.append(file.filename)
+            try:
+                _, file_extension = os.path.splitext(filename)
+                with tempfile.NamedTemporaryFile(delete=False,suffix=file_extension) as temp_file:
+                # Write the uploaded file to the temporary file
+                    shutil.copyfileobj(file.file, temp_file)
+                
+                file_names.append((temp_file.name,file.filename))
 
-                except Exception as e:
-                    tb = traceback.format_exc()
-                    errors.append(f"Failed to save {filename} due to error: {str(e)}")
+            except Exception as e:
+                tb = traceback.format_exc()
+                errors.append(f"Failed to save {filename} due to error: {str(e)}")
 
-                finally:
-                    file.file.close()
-                    
-    response = await internal_image_upload(file_names,emb_manager,image_processor,return_detector,return_embedder,save_invalid)
+            finally:
+                file.file.close()
+                
+    response = await internal_image_upload(file_names,emb_manager,image_processor,image_storage,return_detector,return_embedder,save_invalid)
+    for tempfile_name,_ in file_names:
+        try:
+            os.remove(filename)
+        except OSError:
+            pass
+        shutil.rmtree(tempfile_name+"_faces")
+        
     if isinstance(response,BaseError):
         raise HTTPException(500,jsonable_encoder(response));
     response.errors=response.errors+errors
     return response;
 
 
-async def internal_image_upload(file_names,emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager,
+async def internal_image_upload(file_names:tuple[str,str],emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager,
                                 image_processor:LocalImageProcessor|TritonImageProcessor,
+                                image_storage:BaseImageStorage,
                                 return_detector:DetectorName,return_embedder:EmbedderName,save_invalid:bool)->UploadImagesResponse|BaseError:
 
     errors:list = []
@@ -90,29 +125,41 @@ async def internal_image_upload(file_names,emb_manager:InMemoryImageEmbeddingMan
     # true if images will be saved without containing faces
     i = -1
     invalid_images = []
-    for file in file_names:
+    for temp_file_path,filename in file_names:
         i += 1
-        path = os.path.join(AppPaths.UPLOAD_FOLDER, file)
+        temp_dir = os.path.dirname(temp_file_path)
+        faces_dir=os.path.join(temp_dir,os.path.basename(temp_file_path) + '_faces')
+        os.makedirs(faces_dir,exist_ok=True);
+
         # load model
-        generated_embeddings,errors=await image_processor.process_image(file)
+        generated_embeddings,errors=await image_processor.process_image(temp_file_path,filename,faces_dir)
         return_key=f"{return_detector}_{return_embedder}"
         if return_key not in generated_embeddings or len(generated_embeddings[return_key])==0:
             faces_length.append(0)
             # if images with no detected faces are allowed save them under the no face directory
             if save_invalid:
-                os.replace(
-                    path,
-                    os.path.join(
-                        AppPaths.UPLOAD_FOLDER, "no_face", file
-                    ),
-                )
-            else:
-                os.remove(path)
-            invalid_images.append("no_face/" + file)
+                image_storage.fsave_image(temp_file_path,filename,invalid=True)
+
+            os.remove(temp_file_path)
+            invalid_images.append("no_face/" + filename)
+            continue;
         else:
-            valid_images.append(file)
+            valid_images.append(filename)
             embeddings=generated_embeddings[return_key]
             faces_length.append(len(embeddings))
+        
+        image_storage.fsave_image(temp_file_path,filename)
+        seen_detectors=[];
+        for models in generated_embeddings:
+            detector,_=models.split('_')
+            if detector not in seen_detectors:
+                seen_detectors.append(detector)
+                count=len(generated_embeddings[models])
+                for face_num in range(count):
+                    aligned_filename=face_path(filename,face_num)
+                    path=os.path.join(faces_dir,detector,aligned_filename)
+                    image_storage.fsave_image(path,aligned_filename,detector);
+
         # save the current database state
         emb_manager.save()
         indices_result= util.get_all_detectors_faces(
@@ -136,30 +183,28 @@ async def upload_zip(
     return_embedder: Annotated[EmbedderName, Body(alias="embedder_name")]= EmbedderName.resnet100,
     save_invalid: Annotated[Optional[bool], Body()]=False,
     
+    image_storage:BaseImageStorage=Depends(Provide[Container.image_storage]),
     queue:InMemoryProcessingQueue=Depends(Provide[Container.queue]),
-    image_processor:LocalImageProcessor|TritonImageProcessor=Depends(Provide[Container.default_image_processor]),
-    emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager=Depends(Provide[Container.emb_manager]),
     )->UploadImagesResponse:
     file_names=[]
-    errors=[]
     if not file.filename.endswith('.zip'):
         return JSONResponse(status_code=400, content={"message": "Invalid file type. Only .zip files are allowed."})
-    zip_path = os.path.join(AppPaths.UPLOAD_FOLDER, file.filename)
-    with open(zip_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            for member in zip_ref.namelist():
-                if ImageLoader.allowed_file(member):
-                    safe_filename=member.replace("/",'')
-                    dest_path=os.path.join(AppPaths.UPLOAD_FOLDER,safe_filename)
-                    with zip_ref.open(member) as source,open(dest_path,"wb") as target:
-                        shutil.copyfileobj(source, target)
-                        file_names.append(safe_filename)
-    except zipfile.BadZipFile:
-        os.remove(zip_path)
-        return JSONResponse(status_code=400, content={"message": "Failed to unzip the file. It may be corrupted."})
-
+    with tempfile.NamedTemporaryFile(delete=False) as temp_zip_file:
+        try:
+            shutil.copyfileobj(file.file, temp_zip_file)
+            zip_path=temp_zip_file.name
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                for member in zip_ref.infolist():
+                    if ImageLoader.allowed_file(member.filename):
+                        safe_filename=member.filename.replace("/",'')
+                        with zip_ref.open(member) as source:
+                            success=image_storage.save_image(source,safe_filename,member.file_size);
+                            if success:
+                                file_names.append(safe_filename)
+        except zipfile.BadZipFile as ex:
+            os.remove(zip_path)
+            return JSONResponse(status_code=400, content={"message": "Failed to unzip the file. It may be corrupted."})
+        
     # Remove the zip file after extraction
     os.remove(zip_path)
     message=ProcessingMessage(image_paths=file_names,return_detector=return_detector,return_embedder=return_embedder, save_invalid=save_invalid)

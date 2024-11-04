@@ -24,11 +24,11 @@ class InMemoryImageEmbeddingManager:
     
     def get_image_faces(self,filename:str,face_num:int,detector_name:str,embedder_name:str)->list[FaceInfo]:
         if(face_num==-2):
-            faces=[FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality) for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
+            faces=[FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality,gender=e.gender,age=e.age) for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
         else:
             for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings:
                 if e.name.split('_',2)[-1]==filename and face_num==int(e.name.split('_',2)[-2]):
-                    return [FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality)]
+                    return [FaceInfo(bbox=e.box,landmarks=e.landmarks,quality=e.quality,gender=e.gender,age=e.age)]
         return faces;
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
         embeddings=[e.embedding for e in self.db_embeddings[detector_name].embeddings[embedder_name].embeddings if e.name.split('_',2)[-1]==filename];
@@ -97,7 +97,7 @@ class InMemoryImageEmbeddingManager:
             ids=[]
             index = faiss.IndexFlatIP(512);
             if(quality>0):
-                data.index=faiss.IndexIDMap2(index);
+                data.index=faiss.IndexIDMap(index);
                 filtered=[]
                 for i in range(len(data.embeddings)):
                     if(data.embeddings[i].quality>quality):
@@ -105,9 +105,9 @@ class InMemoryImageEmbeddingManager:
                         filtered.append(data.embeddings[i].embedding)
                 if len(filtered)==0:
                     return [filtered];
-                data.index.add_with_ids(np.vstack(filtered),ids)
+                data.index.add_with_ids(np.vstack(filtered).astype(np.float32),np.array(ids,dtype=np.int64))
             else:
-                data.index = faiss.IndexFlatIP(512);
+                data.index = index;
                 data.index.add(np.vstack([e.embedding for e in data.embeddings]).astype(np.float32))
 
         results=self.find_closest_vector(data,q_embeddings,k);

@@ -1,10 +1,12 @@
 import threading
 import traceback
+from services.util import face_path
 import asyncio
 from models.processing_message import ProcessingMessage
 from .in_memory_processing_queue import InMemoryProcessingQueue
 from models.detector_name import DetectorName
 from models.embedder_name import EmbedderName
+from services.stores.images.base_image_storage import BaseImageStorage
 from services.processing.local.local_image_processor import LocalImageProcessor
 from services.processing.triton.triton_image_processor import TritonImageProcessor
 from services.stores import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
@@ -16,30 +18,34 @@ import services.util as util
 
 class Consumer:
     def __init__(self, queue: InMemoryProcessingQueue,emb_manager:InMemoryImageEmbeddingManager|MilvusImageEmbeddingManager,
-                 image_processor:LocalImageProcessor|TritonImageProcessor,URL=""):
+                 image_processor:LocalImageProcessor|TritonImageProcessor,
+                 image_storage:BaseImageStorage,URL=""):
         self.image_processor = image_processor
+        self.image_storage = image_storage
         self.emb_manager = emb_manager
         self.queue = queue
         self.URL = URL
+        self.processing_lock = threading.Lock()
         self.thread = threading.Thread(target=self.start_event_loop)
         self.thread.daemon = True  # Daemon thread will automatically close with the app
         self.thread.start()
         
+
     def start_event_loop(self):
-        asyncio.run(self.process_queue());
-    async def process_queue(self):
-        while True:
-            task = self.queue.wait_for_task()  # Waits for a task
-            if task is None:  # Stop processing if a `None` task is encountered
-                break
+        # Start consuming messages and pass the callback to handle tasks
+        self.queue.start_consuming(self.process_queue)
+
+    def process_queue(self, message, delivery_tag):
+        """ Callback function to process each message """
+        if self.processing_lock.acquire(blocking=False):
             try:
-                await self.handle_task(task)
-                self.queue.complete_task()
+                asyncio.run(self.handle_task(message))
             except Exception as e:
                 print(f"Error processing task: {str(e)}")
                 traceback.print_exc()
-
-                continue
+            finally:
+                self.queue.complete_task(delivery_tag)  # Acknowledge task completion
+                self.processing_lock.release()
 
     async def handle_task(self, message:ProcessingMessage):
         print(f"Processing Images: {message.image_paths}")
@@ -59,29 +65,43 @@ class Consumer:
         # true if images will be saved without containing faces
         i = -1
         invalid_images = []
-        for file in file_names:
+        for filename in file_names:
             i += 1
-            path = os.path.join(AppPaths.UPLOAD_FOLDER, file)
+            img,temp_file_path=self.image_storage.load_image(filename)
+            temp_dir = os.path.dirname(temp_file_path)
+            faces_dir=os.path.join(temp_dir,os.path.basename(temp_file_path) + '_faces')
+            os.makedirs(faces_dir,exist_ok=True);
+
             # load model
-            generated_embeddings,errors=await self.image_processor.process_image(file)
+            generated_embeddings,errors=await self.image_processor.process_image(temp_file_path,filename,faces_dir)
+
             return_key=f"{return_detector}_{return_embedder}"
             if return_key not in generated_embeddings or len(generated_embeddings[return_key])==0:
                 faces_length.append(0)
                 # if images with no detected faces are allowed save them under the no face directory
                 if save_invalid:
-                    os.replace(
-                        path,
-                        os.path.join(
-                            AppPaths.UPLOAD_FOLDER, "no_face", file
-                        ),
-                    )
-                else:
-                    os.remove(path)
-                invalid_images.append("no_face/" + file)
+                    self.image_storage.fsave_image(temp_file_path,filename,invalid=True)
+
+                os.remove(temp_file_path)
+                invalid_images.append("no_face/" + filename)
+                continue;
             else:
-                valid_images.append(file)
+                valid_images.append(filename)
                 embeddings=generated_embeddings[return_key]
                 faces_length.append(len(embeddings))
+            
+            # self.image_storage.fsave_image(temp_file_path,filename)
+            seen_detectors=[];
+            for models in generated_embeddings:
+                detector,_=models.split('_')
+                if detector not in seen_detectors:
+                    seen_detectors.append(detector)
+                    count=len(generated_embeddings[models])
+                    for face_num in range(count):
+                        aligned_filename=face_path(filename,face_num)
+                        path=os.path.join(faces_dir,detector,aligned_filename)
+                        self.image_storage.fsave_image(path,aligned_filename,detector);
+
             # save the current database state
             self.emb_manager.save()
             indices_result= util.get_all_detectors_faces(

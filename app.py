@@ -2,7 +2,6 @@ import os
 from services.models.model_loader import ModelLoader
 from contextlib import asynccontextmanager
 from config.app_paths import AppPaths
-from fastapi.staticfiles import StaticFiles
 from routes import register_routes,resources
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI,Depends
@@ -16,9 +15,7 @@ from middlewares import register_middlewares
 async def lifespan(app: FastAPI):
     # OnStartup
     await resources.init_resources(app=app);
-    model_loader=app.container.default_model_loader()
-    for model in model_loader.model_registry["detectors"]:
-        os.makedirs(os.path.join(STATIC_FOLDER, model), exist_ok=True)
+
     yield
     # OnShutdown
     pass;
@@ -66,12 +63,10 @@ def delete_embeddings(manager=Depends(Provide[Container.emb_manager])):
 
 
 
-app.mount("/static",StaticFiles(directory="static"),name="static");
-app.mount("/pool",StaticFiles(directory="pool"),name="pool");
-
 
 if __name__ == "__main__":
     try:
+
         uvicorn.run("app:app", host="0.0.0.0", port=5057)
     except Exception as e:
         print(f"Error: {e}")

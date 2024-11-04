@@ -2,6 +2,7 @@ from models.face_info import FaceInfo
 from models.detector_name import DetectorName
 from . import InMemoryImageEmbeddingManager,MilvusImageEmbeddingManager
 from services.models.model_loader import ModelLoader
+from services.processing.image_loader import ImageLoader
 from services import util
 from services.processing.face_aligner import FaceAligner
 from services.processing.local.local_embedding_generator import LocalEmbeddingGenerator
@@ -16,7 +17,6 @@ class MetadataManager:
         self.emb_manager=emb_manager
         self.face_aligner=face_aligner
         self.embedding_generator=embedding_generator
-
     
     def get_image_faces(self, filename: str,face_num:int, detector_name: str,embedder_name:str) -> list[FaceInfo]:
         faces = self.emb_manager.get_image_faces(filename,face_num, detector_name,embedder_name=embedder_name)
@@ -38,7 +38,7 @@ class MetadataManager:
                 temp_detector=self.model_loader.load_detector(detector_name)
                 temp_embedder=self.model_loader.load_embedder(embedder_name)
                 img, faces = self.face_aligner.create_aligned_images(
-                    filename, temp_detector
+                    filename=filename,detector= temp_detector
                 )
                 if img is not None and faces is not None:
                     _, new_embs, _ = self.embedding_generator.generate_all_emb(

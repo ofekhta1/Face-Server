@@ -68,16 +68,23 @@ services:
    depends_on:
      - "standalone"
 
-  face-server:
-   container_name: face-server
-   image: test:latest
-   env_file:
-     - .env
-   ports:
-     - "5057:5057"
-   networks:
-     - default
-
+  # face-server:
+  #  container_name: face-server
+  #  image: test:latest
+  #  env_file:
+  #    - ../.env
+  #  ports:
+  #    - "5057:5057"
+  #  networks:
+  #    - default
+  #  volumes:
+  #   - ../:/user/src/app  # Mount app
+  #  command: python app.py
+    # healthcheck:
+    # test: ["CMD", "curl", "-f", "http://localhost:5057/health"]  # Adjust the port if necessary
+    # interval: 30s  # Time between health checks
+    # timeout: 10s   # Time to wait for a response
+    # retries: 3     # Number of retries before considering the service unhealthy
 
   triton-server:
     container_name: triton-server
@@ -85,6 +92,9 @@ services:
     networks:
      - default
     command: tritonserver --model-repository=/models
+    volumes:
+      - /media/dangrin/Main_Volume/Code/Python/experiments/Triton/Repository:/models  # Mount models repository
+      - /media/dangrin/Main_Volume/Code/Python/experiments/Triton/Cache:/cache  # Mount models cache
     deploy:
       resources:
         reservations:
@@ -92,6 +102,37 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    ports:
+      - "8080:8000"
+      - "8081:8001"
+      - "8082:8002"
+  rabbitmq:
+    container_name: rabbitmq-server
+    image: rabbitmq:4.0.2-management
+    networks:
+     - default
+    environment:
+      METRICS_PROMETHEUS: "true"
+    ports:
+     - "5672:5672"
+     - "15672:15672"
+     - "15692:15692"
+     
+  prometheus:
+    container_name: prometheus-server
+    image: prom/prometheus:v2.54.1
+    network_mode: "host"
+    ports:
+     - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
+     
+  grafana:
+    container_name: grafana-server
+    image: grafana/grafana:11.2.1-ubuntu
+    network_mode: "host"
+    ports:
+     - "3000:3000"
 networks:
   default:
    driver: bridge

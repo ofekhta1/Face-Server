@@ -3,15 +3,15 @@ import os
 import sys
 from models.embedder_name import EmbedderName
 from models.detector_name import DetectorName
-
 sys.path.append(os.path.abspath(".."))
 from models.stored_group import StoredDetectorGroup, StoredGroup
 from services.models.model_loader import ModelLoader
-
+from services.logging import ConsoleLogger
 
 class ImageGroupRepository:
-    def __init__(self, root_path: str, model_loader: ModelLoader):
+    def __init__(self, root_path: str, model_loader: ModelLoader,logger:ConsoleLogger):
         self.groups: dict[DetectorName, StoredDetectorGroup] = {}
+        self.logger=logger
         for model_name, _ in model_loader.model_registry["detectors"].items():
             PKL_PATH = os.path.join(root_path, "static", model_name, "groups.pkl")
             self.groups[model_name] = StoredDetectorGroup({}, PKL_PATH=PKL_PATH)
@@ -22,7 +22,12 @@ class ImageGroupRepository:
             detector_name in self.groups
             and embedder_name in self.groups[detector_name].groups
         )
-
+    def get_group_id(self,name:str, detector_name:DetectorName, embedder_name:EmbedderName)->str:
+        if not self.has_group(detector_name, embedder_name):
+            self.logger.error(f"No group found for {detector_name} {embedder_name}")
+            return None
+        
+        return self.groups[detector_name].groups[embedder_name].index[name]
     def save_index(
         self,
         data: dict[str, str],
@@ -106,6 +111,8 @@ class ImageGroupRepository:
         if img_name in group.index:
             old_group_id = group.index[img_name]
             group.id_groups[old_group_id].remove(img_name)
+            if len(group.id_groups[old_group_id]) == 0:
+                del group.id_groups[old_group_id]
 
         group.index[img_name] = group_id
         if group_id in group.id_groups:

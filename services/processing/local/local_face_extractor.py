@@ -37,7 +37,7 @@ class LocalFaceExtractor:
 
         return faces_copy, sorted_indices
     
-    def extract_faces(self,filename: str, model: BaseDetectorModel,quality_type="face_size_quality"):
+    def extract_faces(self,filename: str, model: BaseDetectorModel,quality_type="face_size_quality",faces_dir=""):
         img =ImageLoader.load_image(filename,model)
         if img is not None:
             faces= model.extract_faces(img)
@@ -46,7 +46,7 @@ class LocalFaceExtractor:
             return img,faces;
         return None,None
     
-    def extract_faces(self,img, model: BaseDetectorModel,quality_type="face_size_quality"):
+    def extract_faces(self,img, model: BaseDetectorModel,quality_type="face_size_quality",faces_dir=""):
         if img is not None:
             faces= model.extract_faces(img)
             quality_model=self.model_loader.load_quality(quality_type)

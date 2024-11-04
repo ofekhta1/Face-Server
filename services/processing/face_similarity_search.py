@@ -11,6 +11,7 @@ from .local.local_embedding_generator import LocalEmbeddingGenerator
 from .face_aligner import FaceAligner
 from services.models import BaseDetectorModel,BaseEmbedderModel
 import time
+from services.util import face_path 
 from .image_loader import ImageLoader
 
 class FaceSimilaritySearch:
@@ -34,9 +35,7 @@ class FaceSimilaritySearch:
         quality_thresh:float=0,
     ) -> FaceEmbeddingError|FaceExtractionError|tuple[list[SimilarImage]]:
         similar_images = []
-        aligned_filename = (
-            f"aligned_{0 if selected_face == -2 else selected_face}_{filename}"
-        )
+        aligned_filename = face_path(filename,selected_face);
         start = time.time()
         embedding = self.emb_manager.get_embedding_by_name(
             aligned_filename, detector_name=detector.name, embedder_name=embedder.name

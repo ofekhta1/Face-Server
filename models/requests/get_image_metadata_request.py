@@ -5,3 +5,4 @@ from fastapi import  Body
 class GetImageMetadataRequest(BaseRequest):
     image:Annotated[str,Body()]
     selected_face:Annotated[Optional[int],Body()]=-2
+    get_group_id: Annotated[bool, Body(default=False)]=False

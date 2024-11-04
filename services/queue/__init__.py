@@ -1,2 +1,3 @@
 from .in_memory_processing_queue import InMemoryProcessingQueue
+from .rabbitmq_queue import RabbitMQQueue
 from .consumer import Consumer

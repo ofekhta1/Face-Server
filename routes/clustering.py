@@ -8,7 +8,7 @@ from models.detector_name import DetectorName
 from models.embedder_name import EmbedderName
 from models.requests import GetClustersRequest, ChangeGroupNameRequest,CompareKinshipClustersRequest,AssignClusterRequest
 from models.responses import CompareKinshipResponse
-
+from services.util import face_path
 clustering_router=APIRouter()
 
 
@@ -35,7 +35,7 @@ def assign_group(request:AssignClusterRequest,
                groups:ImageGroupRepository=Depends(Provide[Container.groups])):
     detector_name=request.detector_name
     embedder_name=request.embedder_name
-    img_name=f"aligned_{request.selected_face}_{request.image}"
+    img_name=face_path(request.image,request.selected_face)
     if(not groups.has_group(detector_name,embedder_name)):
         raise HTTPException(400,f"Group for Detector:{detector_name} and Embedder:{embedder_name} does not exist!") 
     

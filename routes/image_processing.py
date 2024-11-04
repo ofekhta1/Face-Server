@@ -83,7 +83,7 @@ def align_image(request:ProcessImagesRequest,
         else:
             path = os.path.join(AppPaths.UPLOAD_FOLDER, filename)
         if os.path.exists(path):
-            _, faces = face_aligner.create_aligned_images(filename, detector, images)
+            _, faces = face_aligner.create_aligned_images(filename, detector)
             faces_length.append(len(faces))
         else:
             errors.append(f"File {filename} does not exist!")

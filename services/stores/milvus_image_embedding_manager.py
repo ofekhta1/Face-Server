@@ -8,7 +8,7 @@ from models.face_info import FaceInfo
 from ..models.model_loader import ModelLoader
 from pymilvus import MilvusClient,DataType
 from typing import Union,List
-
+from services.util import face_path
 class MilvusImageEmbeddingManager:
     def __init__(self,url,model_loader:ModelLoader):
         self.client = MilvusClient(
@@ -60,14 +60,16 @@ class MilvusImageEmbeddingManager:
             query=f"FileName=='{filename}'"
         else:
             query=f"FileName=='{filename}' && FaceNum=={face_num}"
-        results=self.client.query(collection_name,query,output_fields=["Box","Landmarks","Quality"])
+        results=self.client.query(collection_name,query,output_fields=["Box","Landmarks","Quality","Gender","Age"])
         landmarks=[]
         found=[]
         for result in results:
             landmarks = [[result["Landmarks"][j], result["Landmarks"][j + 1]] for j in range(0, len(result["Landmarks"]), 2)]
             box=result["Box"]
             quality=result["Quality"]
-            found.append(FaceInfo(bbox=box,landmarks=landmarks,quality=quality))
+            gender=result["Gender"]
+            age=result["Age"]
+            found.append(FaceInfo(bbox=box,landmarks=landmarks,quality=quality,gender=gender,age=age))
         return found 
 
     def get_image_embeddings(self,filename:str,detector_name:str,embedder_name:str):
@@ -137,7 +139,7 @@ class MilvusImageEmbeddingManager:
         return None;
 
     def __build_face_embedding(self,data):
-        name=f"aligned_{data['FaceNum']}_{data['FileName']}"
+        name= face_path(data["FileName"], data["FaceNum"])
         box=data["Box"] if "Box" in data else [];
         embedding=data["Embedding"];
         quality=data["Quality"] if "Quality" in data else 1;

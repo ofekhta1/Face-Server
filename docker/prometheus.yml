@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 5s  # How often to scrape targets
+
+scrape_configs:
+  # Scrape RabbitMQ metrics
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['127.0.0.1:15692']  # RabbitMQ Prometheus metrics endpoint
+
+  - job_name: 'face-server'
+    static_configs:
+      - targets: ['127.0.0.1:5057']      
+
+  - job_name: 'triton-server'
+    static_configs:
+      - targets: ['127.0.0.1:8082']      
+
+  - job_name: 'milvus-standalone'
+    static_configs:
+      - targets: ['127.0.0.1:9091']      

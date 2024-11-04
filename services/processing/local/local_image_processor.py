@@ -16,19 +16,19 @@ class LocalImageProcessor:
         self.embedding_generator=embedding_generator
         
 
-    async def process_image(self,filename:str)->tuple[dict[str,list[np.ndarray]],list[str]]:
+    async def process_image(self,file_path:str,save_file_name:str,faces_dir:str)->tuple[dict[str,list[np.ndarray]],list[str]]:
         """
         Processes the given image file to generate face embeddings using multiple detectors and embedders.
 
         This function:
-        1. Loads the image from the provided filename.
+        1. Loads the image from the provided path.
         2. Iterates through all available face detection models (detectors) to detect faces in the image.
         3. For each detected face, aligns the face,saves it to storage and generates an embedding for it with each embedder.
         4. Uses a gender and age model to extract more metadata.
         5. Stores the generated embeddings in a dictionary, keyed by the combination of detector and embedder names.
 
         Args:
-            filename (str): The path to the image file to be processed.
+            file_path (str): The path to the image file to be processed.
 
         Returns:
             tuple: A dictionary containing the generated embeddings for each detector and embedder combination, 
@@ -37,7 +37,7 @@ class LocalImageProcessor:
         errors=[]
         generated_embeddings: dict[str, list[np.ndarray]] = {}
         # Load the imageQ
-        img=ImageLoader.load_image(filename,detector_name=DetectorName.eran_retinaface);#default detectorname,wont be used anyways cause it loads from pool
+        img=ImageLoader.load_image(file_path);
         gender_age_model=self.model_loader.load_genderage("MobileNetCeleb0.25_CelebA");
         
         # load model
@@ -45,7 +45,7 @@ class LocalImageProcessor:
             detector = self.model_loader.load_detector(model_name=detector_name)
             
             det_result = self.face_aligner.create_aligned_images(
-                    filename,img, detector)
+                    file_path,save_file_name, detector,img,faces_dir)
             
             if isinstance(det_result,BaseError):
                     errors.append(det_result)
@@ -62,9 +62,10 @@ class LocalImageProcessor:
                 result = self.embedding_generator.generate_all_emb(
                     img,
                     faces,
-                    filename,
+                    faces_dir,
                     detector,
                     embedder,
+                    filename=save_file_name
                 )
                 if isinstance(result,BaseError):
                     errors.append(result)

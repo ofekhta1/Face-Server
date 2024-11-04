@@ -43,7 +43,7 @@ async def compare_image(request:CompareFacesRequest,
     # ensure that the user check 2 image faces
     for i in range(len(uploaded_images)):
         if len(uploaded_images) == 2 and len(combochanges)==2:
-            filename = f"aligned_{0 if combochanges[i] == -2 else combochanges[i]}_{uploaded_images[i]}"
+            filename= util.face_path(uploaded_images[i], combochanges[i])
             # check if embedding of face already exists
             embedding = emb_manager.get_embedding_by_name(
                 filename, request.detector_name, request.embedder_name
@@ -125,7 +125,7 @@ async def compare_kinship(request:CompareKinshipRequest,
         for i in range(image_count):
             # check if first name embedding already exists in repository
             face_num=0 if combochanges[i] == -2 else combochanges[i]
-            aligned_filename = f"aligned_{face_num}_{uploaded_images[i]}"
+            aligned_filename = util.face_path(uploaded_images[i],face_num)
 
             existing_embedding = emb_manager.get_embedding_by_name(
                 aligned_filename, detector_name, embedder_name

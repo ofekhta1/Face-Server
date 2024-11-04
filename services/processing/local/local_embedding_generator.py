@@ -6,6 +6,7 @@ from services.models.face_embedding.embedders.base_embedder_model import BaseEmb
 from services.models.face_embedding.genderage.base_genderage_model import BaseGenderAgeModel
 import numpy as np
 import os
+from services.util import face_path
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 from config.app_paths import AppPaths
@@ -37,9 +38,10 @@ class LocalEmbeddingGenerator:
         self,
         img,
         faces: list,
-        filename: str,
+        faces_dir: str,
         detector: BaseDetectorModel,
         embedder: BaseEmbedderModel,
+        filename=""
     ) -> FaceEmbeddingError|tuple[np.typing.NDArray[np.uint8], list[FaceEmbedding]]:
         if not faces:
             return FaceEmbeddingError(reason="Faces not exctracted",embedder_name=embedder.name)
@@ -48,7 +50,7 @@ class LocalEmbeddingGenerator:
 
         try:
             embeddings = embedder.embed(img, faces)
-            aligned_images=[f"aligned_{i}_{filename}" for i in range(len(embeddings))]
+            aligned_images=[face_path(filename,i) for i in range(len(embeddings))]
 
         except Exception as ex:
             return FaceEmbeddingError(embedder_name=embedder.name,reason=str(ex))
@@ -80,15 +82,17 @@ class LocalEmbeddingGenerator:
 
         filtered_data = [(e, f, ai) for e, f, ai in zip(embeddings, faces, aligned_images) if not np.isnan(e[0])  and f is not None and ai is not None]
         filtered_embeddings, filtered_faces, filtered_aligned_images = map(list, zip(*filtered_data)) if filtered_data else ([], [], [])
-
-        for idx,fimg in enumerate(filtered_aligned_images):
-            original_path=os.path.join(AppPaths.STATIC_FOLDER, detector.name,fimg)
-            parts=fimg.split('_',2);
-            fimg_filename=parts[-1];
-            new_name=f"aligned_{idx}_{fimg_filename}"
-            new_path=os.path.join(AppPaths.STATIC_FOLDER, detector.name,new_name )
-            os.rename(original_path,new_path)
-            filtered_aligned_images[idx]=new_name
+        
+        # if there are duplicates then reindex the faces
+        if len(index_groups)!=0:
+            for idx,fimg in enumerate(filtered_aligned_images):
+                original_path=os.path.join(faces_dir, detector.name,fimg)
+                parts=fimg.split('_',2);
+                fimg_filename=parts[-1];
+                new_name=face_path(fimg_filename,idx)
+                new_path=os.path.join(faces_dir, detector.name,new_name )
+                os.rename(original_path,new_path)
+                filtered_aligned_images[idx]=new_name
         face_embeddings:list[FaceEmbedding]=[]
 
         for i,face in enumerate(filtered_faces):
@@ -136,7 +140,7 @@ class LocalEmbeddingGenerator:
             box = faces[i]["bbox"].astype(int).tolist()
             self.emb_manager.add_embedding(
                 embedding,
-                f"aligned_{i}_{filename}",
+                face_path(filename, i),
                 box,
                 detector.name,
                 embedder.name,

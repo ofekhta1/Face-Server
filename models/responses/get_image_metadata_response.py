@@ -4,7 +4,7 @@ from fastapi import Form
 from .base_response import BaseResponse
 from models.face_info import FaceInfo
 
-class FindFaceResponse(BaseResponse):
+class GetFacesInfoResponse(BaseResponse):
     faces:List[FaceInfo]
     faces_length:int
 

@@ -6,6 +6,7 @@ from services.models.face_embedding.embedders.base_embedder_model import BaseEmb
 from services.models.face_embedding.genderage.base_genderage_model import BaseGenderAgeModel
 import numpy as np
 import os
+from services.util import face_path
 from sklearn.cluster import DBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
 from config.app_paths import AppPaths
@@ -54,8 +55,7 @@ class TritonEmbeddingGenerator:
                 norm = np.linalg.norm(embedding)
                 embedding=embedding/norm;
                 embeddings.append(embedding)
-                aligned_filename = f"aligned_{i}_{filename}"
-
+                aligned_filename = face_path(filename,i)
                 aligned_images.append(aligned_filename)
             except Exception as ex:
                 return FaceEmbeddingError(embedder_name=embedder.name)
@@ -135,7 +135,7 @@ class TritonEmbeddingGenerator:
             box = faces[i]["bbox"].astype(int).tolist()
             self.emb_manager.add_embedding(
                 embedding,
-                f"aligned_{i}_{filename}",
+                face_path(filename, i),
                 box,
                 detector.name,
                 embedder.name,

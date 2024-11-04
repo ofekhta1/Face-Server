@@ -103,3 +103,6 @@ def calculate_quality(img:np.ndarray,face:dict)->float:
     img_area=img.shape[0]*img.shape[1]
     face_ratio=face_area/img_area
     return face_ratio;
+
+def face_path(filename:str, face_num:int)->str:
+    return f"aligned_{0 if face_num == -2 else face_num}_{filename}"

@@ -3,4 +3,4 @@ from .compare_faces_response import CompareFacesResponse
 from .upload_images_response import UploadImagesResponse
 from .compare_kinship_response import CompareKinshipResponse
 from .search_similar_response import SearchSimilarResponse,SearchMostSimilarResponse,NoMatchResponse
-from .get_image_metadata_response import FindFaceResponse,GetDetectorIndicesResponse
+from .get_image_metadata_response import GetFacesInfoResponse,GetFacesInfoResponse,GetDetectorIndicesResponse

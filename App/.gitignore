@@ -1,0 +1,12 @@
+pool/
+static/
+.venv/
+__pycache__/
+.vscode/
+.git_backup
+OnnxModels/*/*.onnx
+OnnxModels/*/*.zip
+volumes/
+experiments/*
+services/models/face_embedding/detectors/local/retinaface50/rcnn/**/**.so
+services/models/face_embedding/detectors/local/retinaface50/*.params

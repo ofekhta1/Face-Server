@@ -1,0 +1,3 @@
+from .local_image_processor import LocalImageProcessor
+from .local_face_extractor import LocalFaceExtractor
+from .local_embedding_generator import LocalEmbeddingGenerator

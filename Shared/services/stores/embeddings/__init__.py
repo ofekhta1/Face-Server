@@ -1,0 +1,3 @@
+from .base_image_embedding_manager import BaseImageEmbeddingManager
+from .in_memory_image_embedding_manager import InMemoryImageEmbeddingManager
+from .milvus_image_embedding_manager import MilvusImageEmbeddingManager

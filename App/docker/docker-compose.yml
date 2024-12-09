@@ -1,0 +1,147 @@
+version: '3.5'
+
+services:
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.4.0
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  attu:
+   container_name: attu
+   image: zilliz/attu:v2.4.4
+   environment:
+     MILVUS_URL: milvus-standalone:19530
+   ports:
+     - "8000:3000"
+   depends_on:
+     - "standalone"
+
+  # face-server:
+  #  container_name: face-server
+  #  image: test:latest
+  #  env_file:
+  #    - ../.env
+  #  ports:
+  #    - "5057:5057"
+  #  networks:
+  #    - default
+  #  volumes:
+  #   - ../:/user/src/app  # Mount app
+  #  command: python app.py
+    # healthcheck:
+    # test: ["CMD", "curl", "-f", "http://localhost:5057/health"] 
+    # interval: 30s  # Time between health checks
+    # timeout: 10s   # Time to wait for a response
+    # retries: 3     # Number of retries before considering the service unhealthy
+
+  # triton-server:
+  #   container_name: triton-server
+  #   image: dangrin/face-tritonserver:v1.0
+  #   networks:
+  #    - default
+  #   command: tritonserver --model-repository=/models
+  #   volumes:
+  #     - /media/dangrin/Main_Volume/Code/Python/experiments/Triton/Repository:/models  # Mount models repository
+  #     - /media/dangrin/Main_Volume/Code/Python/experiments/Triton/Cache:/cache  # Mount models cache
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   ports:
+  #     - "8080:8000"
+  #     - "8081:8001"
+  #     - "8082:8002"
+  rabbitmq:
+    container_name: rabbitmq-server
+    image: rabbitmq:4.0.2-management
+    networks:
+     - default
+    environment:
+      METRICS_PROMETHEUS: "true"
+    ports:
+     - "5672:5672"
+     - "15672:15672"
+     - "15692:15692"
+     
+  prometheus:
+    container_name: prometheus-server
+    image: prom/prometheus:v2.54.1
+    network_mode: "host"
+    ports:
+     - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
+     
+  grafana:
+    container_name: grafana-server
+    image: grafana/grafana:11.2.1-ubuntu
+    network_mode: "host"
+    ports:
+     - "3000:3000"
+
+
+  valkey:
+    container_name: valkey-server
+    image: valkey/valkey:8.0.1
+    networks:
+     - default
+    ports:
+     - "6379:6379"
+networks:
+  default:
+   driver: bridge

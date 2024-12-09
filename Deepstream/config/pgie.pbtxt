@@ -1,0 +1,139 @@
+
+infer_config {
+  unique_id: 1
+  gpu_ids: [0]
+  max_batch_size: 1
+  backend {
+    inputs: [
+      {
+      name: "input_image",
+      dims: [
+        720,
+        1280,
+        3
+      ],
+      data_type:TENSOR_DT_UINT8
+      }
+      
+    ]
+    outputs:
+    [
+      {
+        name: "EranRetinaFaceDetector_KinshipFS_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipBB_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipMD_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipMS_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipFD_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipSS_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_KinshipSIBS_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_ResNet100GLint360K_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_ResNet50WebFace600K_embeddings"
+      },
+      {
+        name: "EranRetinaFaceDetector_dets_len"
+      },
+      {
+        name: "EranRetinaFaceDetector_dets"
+      },
+      {
+        name: "EranRetinaFaceDetector_kps"
+      },
+      {
+        name: "EranRetinaFaceDetector_quality_scores"
+      },
+      {
+        name: "EranRetinaFaceDetector_genders"
+      },
+      {
+        name: "EranRetinaFaceDetector_ages"
+      },
+      {
+        name: "RetinaFace10GF_KinshipFS_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipBB_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipMD_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipMS_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipFD_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipSS_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_KinshipSIBS_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_ResNet100GLint360K_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_ResNet50WebFace600K_embeddings"
+      },
+      {
+        name: "RetinaFace10GF_dets_len"
+      },
+      {
+        name: "RetinaFace10GF_dets"
+      },
+      {
+        name: "RetinaFace10GF_kps"
+      },
+      {
+        name: "RetinaFace10GF_quality_scores"
+      },
+      {
+        name: "RetinaFace10GF_genders"
+      },
+      {
+        name: "RetinaFace10GF_ages"
+      }
+    ]
+    triton {
+      model_name: "pipeline"
+      version: -1
+      grpc {
+        url: "0.0.0.0:8081"
+        enable_cuda_buffer_sharing: true
+      }
+    }
+  }
+  preprocess{
+    tensor_order: TENSOR_ORDER_NHWC
+    network_format: IMAGE_FORMAT_BGR
+  }
+  postprocess {
+    other {
+    }
+  }
+
+
+}
+input_control {
+  process_mode: PROCESS_MODE_FULL_FRAME
+  operate_on_gie_id: -1
+  interval: 0
+}
+output_control {
+  output_tensor_meta: true
+}

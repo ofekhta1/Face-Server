@@ -51,7 +51,7 @@ async def stream_static(file_path: str,
     # Use a context manager to open the file
     return StreamingResponse(file_stream, media_type=media_type)
     
-@file_handling_router.get("/pool/request{file_path:path}")
+@file_handling_router.get("/pool/{file_path:path}")
 @inject
 async def stream_pool(file_path: str,
                         image_storage:BaseImageStorage=Depends(Provide[Container.image_storage])):
@@ -232,7 +232,7 @@ async def upload_zip(
     else:
         await job_manager.delete_job(job_id)
         return JSONResponse(status_code=400, content={"message": "Failed to enqueue the processing job"})
-
+6
 
 
 @file_handling_router.get("/api/files/gallery")

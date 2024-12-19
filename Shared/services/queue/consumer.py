@@ -102,6 +102,7 @@ class Consumer:
     async def handle_task(self, message: ProcessingMessage):
         """Handle individual processing tasks"""
         print(f"Processing Images: {message.data_paths}")
+        invalid_images=None
         try:
             result = await self.process_images(
                 file_names=message.data_paths,
@@ -120,7 +121,10 @@ class Consumer:
         except Exception as e:
             print(f"Task handling error: {str(e)}")
             traceback.print_exc()
-            await self.job_manager.fail_job(message.id, str(e))
+            if invalid_images is None:
+                invalid_images = message.data_paths
+                valid_images=[]
+            await self.job_manager.fail_job(message.id, str(e),invalid_images,valid_images)
 
     async def process_images(self, file_names: list[str],
                            return_detector: DetectorName,

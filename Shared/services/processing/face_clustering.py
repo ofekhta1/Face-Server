@@ -50,6 +50,7 @@ class FaceClustering:
                             seen[existing_index[face]]+=1
                         else:
                             seen[existing_index[face]]=1
+                    
                 most_common_id=max(seen,key=seen.get);
                 if(seen[most_common_id]>=min_samples):
                     # set all values in cluster to most_common_id

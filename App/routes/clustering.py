@@ -12,7 +12,7 @@ from Shared.services.util import face_path
 clustering_router=APIRouter()
 
 
-@clustering_router.post("/api/cluster")
+@clustering_router.post("/api/clustering/cluster")
 @inject
 async def make_clusters(request:GetClustersRequest,
                   face_clustering:FaceClustering=Depends(Provide[Container.face_clustering]))-> dict[str, list[str]]:

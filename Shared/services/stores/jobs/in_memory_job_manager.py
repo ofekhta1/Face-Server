@@ -49,3 +49,20 @@ class InMemoryJobManager(BaseJobManager):
 
     async def get_all_jobs(self) -> List[tuple[UUID, JobMetadata]]:
         return [(job_id, metadata) for job_id, metadata in self.jobs.items()]
+    
+    async def complete_job(self, job_id, valid_images, invalid_images):
+        if job_id in self.jobs:
+            self.jobs[job_id].completed_at = datetime.datetime.now(datetime.timezone.utc)
+            self.jobs[job_id].valid_images = valid_images
+            self.jobs[job_id].invalid_images = invalid_images
+            self.jobs[job_id].status = JobStatus.completed
+            self.logger.info(f"Job {job_id} completed with valid images: {valid_images}, invalid images: {invalid_images}")
+
+    async def fail_job(self, job_id, error_message, invalid_images, valid_images = ...):
+        if job_id in self.jobs:
+            self.jobs[job_id].completed_at = datetime.datetime.now(datetime.timezone.utc)
+            self.jobs[job_id].valid_images = valid_images
+            self.jobs[job_id].invalid_images = invalid_images
+            self.jobs[job_id].error_message = error_message
+            self.jobs[job_id].status = JobStatus.failed
+            self.logger.error(f"Job {job_id} failed: {error_message}, with valid images: {valid_images}, invalid images: {invalid_images}")

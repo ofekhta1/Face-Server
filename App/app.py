@@ -27,11 +27,7 @@ async def lifespan(app: FastAPI):
 
 app=FastAPI(lifespan=lifespan);
 origins = [
-    "http://localhost:5000",
-    "http://127.0.0.1:5000",
-    "https://127.0.0.1:7101",
-    "https://localhost:7101",
-    "http://localhost:5156",
+    "*"
 ]
 
 app.add_middleware(

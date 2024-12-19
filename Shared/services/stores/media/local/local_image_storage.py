@@ -1,7 +1,8 @@
 from ..base_image_storage import BaseImageStorage
+from .local_media_storage import LocalMediaStorage
 from logging import Logger
 
-class LocalImageStorage(BaseImageStorage):
+class LocalImageStorage(BaseImageStorage,LocalMediaStorage):
     def __init__(self,logger: Logger):
         self.logger = logger
     def init_storage(self, **kwargs) -> None:
@@ -19,3 +20,4 @@ class LocalImageStorage(BaseImageStorage):
         """
         self.pool_dir = kwargs.get("pool_dir")
         self.processed_dir = kwargs.get("processed_dir")
+        

@@ -40,7 +40,11 @@ class BaseInsightfaceEmbedder(BaseEmbedderModel):
             normalized_embeddings = embeddings / norms
             return normalized_embeddings;
         #one face
-        return self.embedder.get(img,faces)
+        embedding= self.embedder.get(img,faces)
+        norm = np.linalg.norm(embedding, axis=0, keepdims=True)
+        normalized_embedding = embedding/norm
+        return normalized_embedding
+        
         
     def embed_raw(self,img:cv2.Mat|list[cv2.Mat]):
         embeddings = self.embedder.get_raw(img)
